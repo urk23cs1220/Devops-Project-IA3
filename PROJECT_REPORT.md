@@ -1,194 +1,63 @@
-# Agro-Link: Farm-to-Table E-Commerce Platform
-## Project Report
+# AgroLink: DevOps-Automated Farm-to-Table Platform
+## Comprehensive Project Report (DevOps Edition)
 
 ### 1. Project Overview
-Agro-Link is a modern e-commerce platform designed to connect local farmers directly with consumers, facilitating the sale of fresh agricultural products. The platform eliminates intermediaries, ensuring better prices for farmers and fresher products for consumers.
+Agro-Link is a modern e-commerce platform designed to connect local farmers directly with consumers. This version of the project focuses on **DevOps-based automation**, ensuring the application is containerized, orchestrated, and deployed via a fully automated CI/CD pipeline.
 
-### 2. Technical Architecture
+### 2. Technical Architecture (Cloud-Native)
 
-#### 2.1 Frontend Technology Stack
-- **Framework**: React.js with Vite
-- **UI Library**: React Bootstrap
-- **State Management**: Context API
-- **Routing**: React Router
-- **HTTP Client**: Axios
-- **Additional Libraries**:
-  - react-toastify for notifications
-  - bootstrap-icons for icons
+#### 2.1 Technology Stack
+- **Frontend**: React.js (Vite) + Nginx (Containerized)
+- **Backend**: Node.js (Express) (Containerized)
+- **Database**: **Supabase (PostgreSQL)** - Migrated from MongoDB for better relational data handling and cloud scalability.
+- **Containerization**: Docker & Docker Compose
+- **Orchestration**: Kubernetes (Minikube)
+- **CI/CD**: GitHub Actions
+- **Infrastructure as Code (IaC)**: Terraform & Ansible
 
-#### 2.2 Backend Technology Stack
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Database**: MongoDB with Mongoose ODM
-- **Authentication**: JWT (JSON Web Tokens)
-- **File Upload**: Multer
-- **API Security**: Express-validator
+#### 2.2 DevOps Integration
+- **Docker**: Customized Dockerfiles for both frontend and backend to minimize image size and maximize security.
+- **Kubernetes**: Defined Deployment and Service manifests (NodePort) to manage scaling and high availability.
+- **Registry**: Integrated with **Docker Hub** for automated image storage and versioning.
 
-### 3. Key Features
+### 3. Key DevOps Features
 
-#### 3.1 User Management
-- Multi-role authentication (Farmers and Consumers)
-- Secure user registration and login
-- Profile management
-- Role-based access control
+#### 3.1 GitHub Actions CI/CD Pipeline
+- **Auto-Build**: Triggers on every push to the `main` branch.
+- **registry Push**: Automatically builds and pushes production-ready images to Docker Hub.
+- **Automated Deploy**: Dynamically injects secrets and deploys the latest images to the Kubernetes cluster.
 
-#### 3.2 Product Management
-- Product listing with categories
-- Search and filter functionality
-- Image upload for products
-- Detailed product views
-- Stock management
+#### 3.2 Infrastructure as Code (IaC)
+- **Terraform**: Automates the creation of the `agrolink-prod` Kubernetes namespace for environment isolation.
+- **Ansible**: Provides a playbook for rapid local verification and multinode deployment configuration.
 
-#### 3.3 Order Management
-- Shopping cart functionality
-- Order creation and tracking
-- Transaction handling
-- Order status updates
-- Delivery address management
+#### 3.3 Security & Secret Management
+- **Kubernetes Secrets**: All sensitive credentials (Supabase Keys, JWT Secrets) are managed via encrypted Kubernetes Secrets, never hardcoded in the source code.
 
-#### 3.4 Farmer Features
-- Product listing and management
-- Order fulfillment
-- Inventory management
-- Sales tracking
+### 4. Database Schema (Supabase/PostgreSQL)
+The application has been refactored to use a relational schema in Supabase:
+- **Users**: UUID-based authentication with role-based access.
+- **Products**: Detailed agricultural product tracking with JSONB support for images and locations.
+- **Orders**: Relational linking between consumers and farmers with status tracking.
 
-#### 3.5 Consumer Features
-- Product browsing and search
-- Cart management
-- Order placement
-- Order history
+### 5. API Endpoints (Restructured)
+The backend routes remain RESTful but are now optimized for a containerized environment, using environment variables for all cross-service communication.
 
-### 4. Database Schema
-
-#### 4.1 User Model
-```javascript
-- name: String
-- email: String
-- password: String (hashed)
-- role: String (farmer/consumer)
-- phone: String
-- address: Object
+### 6. Project Structure (DevOps Organized)
+```
+agrolink/
+├── client/                 # Frontend (Dockerfile included)
+├── server/                 # Backend (Dockerfile included)
+├── k8s/                    # Kubernetes Deployment Manifests
+├── terraform/              # Infrastructure-as-Code (Namespace automation)
+├── ansible/                # Automated Playbooks
+└── .github/workflows/      # CI/CD Pipeline Configuration
 ```
 
-#### 4.2 Product Model
-```javascript
-- title: String
-- description: String
-- category: String
-- pricePerUnit: Number
-- measuringUnit: String
-- quantityAvailable: Number
-- minOrderQty: Number
-- images: Array
-- farmer: Reference
-```
+### 7. Performance & Scalability
+- **Elastic Scaling**: Managed by Kubernetes replicas.
+- **Static Content**: Served via Nginx in the frontend container.
+- **Global Availability**: Provided by the Supabase cloud backend.
 
-#### 4.3 Order Model
-```javascript
-- consumer: Reference
-- farmer: Reference
-- items: Array
-- subtotal: Number
-- status: String
-- deliveryAddress: Object
-```
-
-### 5. Security Features
-- Password hashing
-- JWT-based authentication
-- Input validation and sanitization
-- Protected API routes
-- File upload restrictions
-- Error handling middleware
-- Role-based access control
-
-### 6. User Interface
-
-#### 6.1 Key Pages
-- Home page
-- Product listing
-- Product details
-- Shopping cart
-- Checkout process
-- User dashboard
-- Order management
-
-#### 6.2 Responsive Design
-- Mobile-first approach
-- Responsive grid system
-- Adaptive layouts
-- Touch-friendly interfaces
-
-### 7. API Endpoints
-
-#### 7.1 Authentication Routes
-```
-POST /api/auth/register
-POST /api/auth/login
-GET /api/auth/profile
-```
-
-#### 7.2 Product Routes
-```
-GET /api/products
-POST /api/products
-GET /api/products/:id
-PUT /api/products/:id
-DELETE /api/products/:id
-```
-
-#### 7.3 Order Routes
-```
-POST /api/orders
-GET /api/orders
-GET /api/orders/:id
-PUT /api/orders/:id/status
-```
-
-### 8. Project Structure
-```
-agro-link/
-├── client/                 # Frontend React application
-│   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── contexts/      # React Context providers
-│   │   ├── pages/         # Page components
-│   │   ├── services/      # API services
-│   │   └── utils/         # Utility functions
-│   └── public/            # Static assets
-└── server/                # Backend Node.js application
-    ├── config/            # Configuration files
-    ├── controllers/       # Request handlers
-    ├── middlewares/      # Custom middlewares
-    ├── models/           # Database models
-    ├── routes/           # API routes
-    └── uploads/          # File upload directory
-```
-
-### 9. Performance Optimizations
-- Debounced search functionality
-- Optimized image loading
-- MongoDB indexing
-- Error boundary implementation
-- Lazy loading of routes
-- Efficient state management
-
-### 10. Future Enhancements
-1. **Payment Integration**
-   - Integration with payment gateways
-   - Multiple payment options
-
-2. **Advanced Features**
-   - Real-time order tracking
-   - Review and rating system
-   - Chat functionality
-   - Analytics dashboard
-
-3. **Technical Improvements**
-   - Implementing Redis caching
-   - Adding WebSocket support
-   - Enhanced security measures
-   - Mobile app development
-
-### 11. Conclusion
-Agro-Link successfully implements a secure and efficient platform for connecting farmers with consumers. The application demonstrates proper use of modern web technologies, secure practices, and user-friendly interfaces while maintaining scalability and performance.
+### 8. Conclusion
+The AgroLink project successfully demonstrates a complete transition from a local MERN stack to a sophisticated, **DevOps-automated** cloud-native application. By utilizing Docker, Kubernetes, and GitHub Actions, the platform is now ready for high-scale, reliable deployment.

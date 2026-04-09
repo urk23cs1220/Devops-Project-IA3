@@ -18,8 +18,8 @@ const Home = () => {
                 🌱 Agro-Link
               </h1>
               <p className="lead mb-4 text-light">
-                Connecting Farmers Directly with Consumers. 
-                Fresh produce delivered to your doorstep. Support local agriculture 
+                Connecting Farmers Directly with Consumers.
+                Fresh produce delivered to your doorstep. Support local agriculture
                 and get the best quality at fair prices.
               </p>
               <div className="d-flex flex-wrap gap-3">
@@ -82,11 +82,11 @@ const Home = () => {
         <Container>
           <Row className="text-center mb-5">
             <Col>
-              <h2 className="fw-bold text-gradient">Why Choose Agro-Link?</h2>
+              <h2 className="fw-bold text-gradient">Why Choose Agro-Link?....</h2>
               <p className="text-muted lead">Experience the future of farm-to-table shopping</p>
             </Col>
           </Row>
-          
+
           <Row>
             <Col md={4} className="mb-4">
               <Card className="feature-card h-100 border-0 shadow-custom">
@@ -94,8 +94,8 @@ const Home = () => {
                   <div className="feature-icon">👨‍🌾</div>
                   <Card.Title className="h5 mb-3">For Farmers</Card.Title>
                   <Card.Text className="text-muted">
-                    Sell your fresh produce directly to consumers without middlemen. 
-                    Get fair prices, build your brand, and grow your customer base 
+                    Sell your fresh produce directly to consumers without middlemen.
+                    Get fair prices, build your brand, and grow your customer base
                     with our easy-to-use platform.
                   </Card.Text>
                   {!isAuthenticated && (
@@ -106,15 +106,15 @@ const Home = () => {
                 </Card.Body>
               </Card>
             </Col>
-            
+
             <Col md={4} className="mb-4">
               <Card className="feature-card h-100 border-0 shadow-custom">
                 <Card.Body className="text-center p-4">
                   <div className="feature-icon">🛒</div>
                   <Card.Title className="h5 mb-3">For Consumers</Card.Title>
                   <Card.Text className="text-muted">
-                    Buy fresh, organic produce directly from local farmers. 
-                    Support local agriculture, get the best quality, and enjoy 
+                    Buy fresh, organic produce directly from local farmers.
+                    Support local agriculture, get the best quality, and enjoy
                     farm-fresh delivery right to your doorstep.
                   </Card.Text>
                   {!isAuthenticated && (
@@ -125,15 +125,15 @@ const Home = () => {
                 </Card.Body>
               </Card>
             </Col>
-            
+
             <Col md={4} className="mb-4">
               <Card className="feature-card h-100 border-0 shadow-0 shadow-custom">
                 <Card.Body className="text-center p-4">
                   <div className="feature-icon">⚡</div>
                   <Card.Title className="h5 mb-3">Fast & Reliable</Card.Title>
                   <Card.Text className="text-muted">
-                    Fresh produce delivered within hours of harvest. Real-time tracking, 
-                    secure payments, and excellent customer support for the best 
+                    Fresh produce delivered within hours of harvest. Real-time tracking,
+                    secure payments, and excellent customer support for the best
                     farm-to-table experience.
                   </Card.Text>
                   <Button as={Link} to="/products" variant="outline-success" className="mt-2">

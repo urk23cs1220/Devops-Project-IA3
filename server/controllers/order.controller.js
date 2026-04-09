@@ -1,533 +1,248 @@
-﻿const Order = require("../models/Order.model");
-const Product = require("../models/Product.model");
-const mongoose = require("mongoose");
+const supabase = require("../config/supabase");
 const { validationResult } = require("express-validator");
-
-// Ensure MongoDB is connected
-const ensureConnection = async () => {
-  if (mongoose.connection.readyState !== 1) {
-    console.log('⚠️ MongoDB not connected, attempting to connect...');
-    await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      dbName: 'agrolink'
-    });
-  }
-  console.log('✅ MongoDB connection verified');
-};
 
 const orderController = {
   createOrder: async (req, res) => {
-    let session;
     try {
-      // Ensure database is connected
-      await ensureConnection();
-      
       console.log('📦 Starting order creation...');
       
-      // First validate request
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        console.log('❌ Validation failed:', errors.array());
-        return res.status(400).json({
-          message: "Validation failed",
-          errors: errors.array()
-        });
+        return res.status(400).json({ message: "Validation failed", errors: errors.array() });
       }
 
       const { items, deliveryAddress } = req.body;
-      
-      // Log request details
-      console.log('📥 createOrder request details:', {
-        items: items?.length || 0,
-        hasDeliveryAddress: !!deliveryAddress,
-        userId: req.user?._id?.toString() || req.user?.id || null,
-      });
+      const consumerId = req.user?.id || req.user?._id;
 
-      // Validate basic requirements
       if (!items || !Array.isArray(items) || items.length === 0) {
-        console.log('❌ Invalid items array');
         return res.status(400).json({ message: "Items array is required and must not be empty" });
       }
-
-      // FIX 1: Check for both validation and business logic field names
-      const invalidItems = items.filter(item => !item.product || !item.qty || !item.price);
-      if (invalidItems.length > 0) {
-        console.log('❌ Invalid item data:', invalidItems);
-        return res.status(400).json({ 
-          message: "Each item must have product, qty, and price",
-          invalidItems
-        });
-      }
-
-      // Validate quantities are positive numbers
-      const invalidQuantities = items.filter(item => !Number.isInteger(item.qty) || item.qty <= 0);
-      if (invalidQuantities.length > 0) {
-        console.log('❌ Invalid quantities:', invalidQuantities);
-        return res.status(400).json({ 
-          message: "Quantity must be a positive integer",
-          invalidItems: invalidQuantities
-        });
-      }
-
       if (!deliveryAddress || deliveryAddress.trim().length < 10) {
-        console.log('❌ Invalid delivery address');
         return res.status(400).json({ message: "Delivery address must be at least 10 characters long" });
       }
-
-      if (!req.user || !req.user.id) {
-        console.log('❌ No authenticated user found');
+      if (!consumerId) {
         return res.status(401).json({ message: "User authentication required" });
       }
 
-      // Start transaction
-      session = await mongoose.startSession();
-      await session.startTransaction();
-      console.log('✅ Transaction started');
-
-      // Get user ID (support both formats)
-      const consumerId = req.user?.id || req.user?._id;
-      
-      // Get product details and validate
       const productIds = items.map(item => item.product);
-      console.log('🔍 Fetching products:', productIds);
       
-      const products = await Product.find({ _id: { $in: productIds } })
-        .populate('farmer', 'name email')
-        .session(session);
-      
-      if (products.length !== productIds.length) {
-        console.log('❌ Some products not found');
-        await session.abortTransaction();
-        return res.status(404).json({ 
-          message: "Some products not found",
-          found: products.length,
-          requested: productIds.length
-        });
-      }
+      const { data: products, error: productError } = await supabase
+        .from('products')
+        .select('*, farmer:users!products_farmer_id_fkey(id, name, email)')
+        .in('id', productIds);
+        
+      if (productError) throw productError;
 
-      const productMap = products.reduce((map, product) => {
-        map[product._id.toString()] = product;
-        return map;
-      }, {});
+      if (!products || products.length !== productIds.length) {
+        return res.status(404).json({ message: "Some products not found" });
+      }
 
       let subtotal = 0;
       const orderItems = [];
       let farmerId = null;
 
-      // First validate all products are from same farmer
+      const productMap = products.reduce((map, p) => { map[p.id] = p; return map; }, {});
+
       for (const product of products) {
         if (!farmerId) {
-          farmerId = product.farmer;
-          console.log('👨‍🌾 Order farmer identified:', farmerId);
-        } else if (farmerId.toString() !== product.farmer.toString()) {
-          console.log('❌ Products from multiple farmers detected');
-          // FIX 4: Remove duplicate abortTransaction
-          await session.abortTransaction();
+          farmerId = product.farmer_id;
+        } else if (farmerId !== product.farmer_id) {
           return res.status(400).json({ message: "All items must be from the same farmer" });
         }
       }
 
       for (const item of items) {
-        const product = productMap[item.product.toString()];
+        const product = productMap[item.product];
         
-        if (!product) {
-          await session.abortTransaction();
-          return res.status(404).json({ message: `Product not found: ${item.product}` });
+        if (product.quantity_available < item.qty) {
+          return res.status(400).json({ message: `Insufficient quantity for ${product.title}. Available: ${product.quantity_available}` });
+        }
+        if (product.min_order_qty > item.qty) {
+          return res.status(400).json({ message: `Minimum order quantity for ${product.title} is ${product.min_order_qty}` });
         }
 
-        if (product.quantityAvailable < item.qty) {
-          await session.abortTransaction();
-          return res.status(400).json({
-            message: `Insufficient quantity for ${product.title}. Available: ${product.quantityAvailable}`
-          });
-        }
-
-        if (product.minOrderQty > item.qty) {
-          await session.abortTransaction();
-          return res.status(400).json({
-            message: `Minimum order quantity for ${product.title} is ${product.minOrderQty}`
-          });
-        }
-
-        const itemTotal = product.pricePerUnit * item.qty;
+        const itemTotal = product.price_per_unit * item.qty;
         subtotal += itemTotal;
 
         orderItems.push({
-          product: product._id,
+          product: product.id,
           title: product.title,
           qty: item.qty,
-          unitPrice: product.pricePerUnit,
-          measuringUnit: product.measuringUnit
+          unitPrice: product.price_per_unit,
+          measuringUnit: product.measuring_unit
         });
-
-        product.quantityAvailable -= item.qty;
-        await product.save({ session });
       }
 
-      if (!farmerId) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "Could not determine farmer for the order" });
+      // Decrement stock
+      for (const item of items) {
+        const product = productMap[item.product];
+        await supabase
+          .from('products')
+          .update({ quantity_available: product.quantity_available - item.qty })
+          .eq('id', product.id);
       }
 
-      const order = new Order({
-        consumer: consumerId,
-        farmer: farmerId,
-        items: orderItems,
-        subtotal,
-        deliveryAddress: deliveryAddress.trim(),
-        status: "placed"
-      });
-
-      console.log('💾 Saving order...', {
-        consumerId: order.consumer,
-        farmerId: order.farmer,
-        itemCount: orderItems.length,
-        total: subtotal
-      });
-
-      const savedOrder = await order.save({ session });
-      
-      // Double-check everything saved correctly
-      const verifiedOrder = await Order.findById(savedOrder._id)
-        .session(session);
+      // Insert Order
+      const { data: savedOrder, error: insertError } = await supabase
+        .from('orders')
+        .insert([{
+          consumer_id: consumerId,
+          farmer_id: farmerId,
+          items: orderItems,
+          subtotal,
+          delivery_address: deliveryAddress.trim(),
+          status: "placed"
+        }])
+        .select()
+        .single();
         
-      if (!verifiedOrder) {
-        throw new Error("Order failed to save properly");
-      }
+      if (insertError) throw insertError;
 
-      await session.commitTransaction();
-      console.log('✅ Transaction committed successfully');
-
-      // Now populate the order with all required details
-      const populatedOrder = await Order.findById(savedOrder._id)
-        .populate("consumer", "name email phone")
-        .populate("farmer", "name email phone")
-        .populate("items.product", "title images pricePerUnit measuringUnit");
-
-      if (!populatedOrder) {
-        throw new Error("Failed to retrieve saved order");
-      }
-
-      // FIX 2 & 3: Remove references to undefined 'orders' variable
-      console.log('✅ Order created successfully:', {
-        orderId: populatedOrder._id,
-        total: populatedOrder.subtotal,
-        itemCount: populatedOrder.items.length
-      });
+      savedOrder._id = savedOrder.id;
 
       res.status(201).json({
         message: "Order created successfully",
-        order: populatedOrder
+        order: savedOrder
       });
 
     } catch (error) {
-      console.error('❌ Order creation error:', {
-        error: error.message,
-        stack: error.stack
-      });
-      
-      if (session) {
-        try {
-          await session.abortTransaction();
-          console.log('✅ Transaction aborted');
-        } catch (abortError) {
-          console.error('❌ Error aborting transaction:', abortError);
-        }
-      }
-
-      if (error.name === 'ValidationError') {
-        return res.status(400).json({ 
-          message: 'Invalid order data', 
-          errors: Object.values(error.errors).map(err => err.message)
-        });
-      } 
-      
-      if (error.name === 'MongoServerError' && error.code === 11000) {
-        return res.status(400).json({ 
-          message: 'Duplicate order detected' 
-        });
-      }
-
-      if (error.message.includes('Product not found') || 
-          error.message.includes('Insufficient quantity')) {
-        return res.status(400).json({ 
-          message: error.message 
-        });
-      }
-
-      res.status(500).json({ 
-        message: 'Server error creating order',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    } finally {
-      if (session) {
-        try {
-          await session.endSession();
-          console.log('✅ Session ended');
-        } catch (endError) {
-          console.error('❌ Error ending session:', endError);
-        }
-      }
+      console.error('❌ Order creation error:', error);
+      res.status(500).json({ message: 'Server error creating order', error: error.message });
     }
   },
 
   getConsumerOrders: async (req, res) => {
     try {
-      await ensureConnection();
+      const consumerId = req.user?.id || req.user?._id;
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('*, farmer:users!orders_farmer_id_fkey(id, name, email, phone, address)')
+        .eq('consumer_id', consumerId)
+        .order('created_at', { ascending: false });
 
-      console.log('📥 Fetching consumer orders:', {
-        consumerId: req.user?.id || req.user?._id,
-        endpoint: req.originalUrl
-      });
+      if (error) throw error;
 
-      const orders = await Order.find({ consumer: req.user.id })
-        .populate("farmer", "name email phone address")
-        .populate("items.product", "title images pricePerUnit measuringUnit")
-        .sort({ createdAt: -1 });
-
-      console.log('✅ Found consumer orders:', {
-        count: orders.length,
-        userId: req.user?.id
-      });
-
-      // Transform the orders to match the required frontend format
       const transformedOrders = orders.map(order => {
-        // Generate order number if not exists
-        const orderNumber = order.orderNumber || `ORD-${order.createdAt.getFullYear()}-${order._id.toString().slice(-4).toUpperCase()}`;
-        
-        // Generate tracking number if not exists
-        const trackingNumber = order.trackingNumber || `TRK${order._id.toString().slice(-6).toUpperCase()}`;
-        
-        // Transform items to match frontend format
-        const transformedItems = order.items.map(item => ({
-          product: {
-            title: item.product?.title || item.title,
-            pricePerUnit: item.unitPrice,
-            measuringUnit: item.measuringUnit
-          },
-          quantity: item.qty,
-          price: item.unitPrice * item.qty
-        }));
-
-        // Generate tracking history based on order status
+        const dt = new Date(order.created_at);
+        const orderNumber = `ORD-${dt.getFullYear()}-${order.id.slice(-4).toUpperCase()}`;
+        const trackingNumber = `TRK${order.id.slice(-6).toUpperCase()}`;
         const trackingHistory = generateTrackingHistory(order);
-
+        
         return {
-          _id: order._id,
-          orderNumber: orderNumber,
+          _id: order.id,
+          orderNumber,
           status: order.status,
           totalAmount: order.subtotal,
-          createdAt: order.createdAt,
-          items: transformedItems,
-          trackingNumber: trackingNumber,
-          trackingHistory: trackingHistory
+          createdAt: order.created_at,
+          items: order.items.map(item => ({
+            product: {
+              title: item.title,
+              pricePerUnit: item.unitPrice,
+              measuringUnit: item.measuringUnit
+            },
+            quantity: item.qty,
+            price: item.unitPrice * item.qty
+          })),
+          trackingNumber,
+          trackingHistory,
+          farmer: order.farmer
         };
       });
 
-      // Return in the exact format expected by frontend
-      res.json({
-        success: true,
-        orders: transformedOrders
-      });
+      res.json({ success: true, orders: transformedOrders });
     } catch (error) {
-      console.error('❌ Error fetching consumer orders:', {
-        error: error.message,
-        userId: req.user?.id,
-        stack: error.stack
-      });
-
-      res.status(500).json({ 
-        success: false,
-        message: "Server error fetching orders",
-        error: error.message 
-      });
+      console.error('Error fetching consumer orders:', error);
+      res.status(500).json({ success: false, message: "Server error fetching orders", error: error.message });
     }
   },
 
   getFarmerOrders: async (req, res) => {
     try {
-      await ensureConnection();
+      const farmerId = req.user?.id || req.user?._id;
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('*, consumer:users!orders_consumer_id_fkey(id, name, email, phone, address)')
+        .eq('farmer_id', farmerId)
+        .order('created_at', { ascending: false });
 
-      console.log('📥 Fetching farmer orders:', {
-        farmerId: req.user?.id || req.user?._id
-      });
-
-      const orders = await Order.find({ farmer: req.user.id })
-        .populate("consumer", "name email phone address")
-        .populate("items.product", "title images pricePerUnit measuringUnit")
-        .sort({ createdAt: -1 });
-
-      console.log('✅ Found farmer orders:', {
-        count: orders.length,
-        userId: req.user?.id
-      });
-
-      res.json({
-        success: true,
-        orders: orders
-      });
+      if (error) throw error;
+      
+      const mappedOrders = orders.map(o => ({...o, _id: o.id}));
+      res.json({ success: true, orders: mappedOrders });
     } catch (error) {
-      console.error('❌ Error fetching farmer orders:', {
-        error: error.message,
-        userId: req.user?.id,
-        stack: error.stack
-      });
-
-      res.status(500).json({ 
-        success: false,
-        message: "Server error fetching orders",
-        error: error.message 
-      });
+      console.error('Error fetching farmer orders:', error);
+      res.status(500).json({ success: false, message: "Server error fetching orders", error: error.message });
     }
   },
 
   getOrder: async (req, res) => {
     try {
-      await ensureConnection();
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('*, consumer:users!orders_consumer_id_fkey(*), farmer:users!orders_farmer_id_fkey(*)')
+        .eq('id', req.params.id)
+        .single();
 
-      console.log('📥 Fetching order details:', {
-        orderId: req.params.id,
-        requestedBy: req.user?.id
-      });
+      if (error || !order) return res.status(404).json({ success: false, message: "Order not found" });
 
-      const order = await Order.findById(req.params.id)
-        .populate("consumer", "name email phone address")
-        .populate("farmer", "name email phone address")
-        .populate("items.product", "title images pricePerUnit measuringUnit");
-
-      if (!order) {
-        console.log('❌ Order not found:', req.params.id);
-        return res.status(404).json({ 
-          success: false,
-          message: "Order not found" 
-        });
+      const userId = req.user?.id || req.user?._id;
+      if (order.consumer_id !== userId && order.farmer_id !== userId) {
+         return res.status(403).json({ success: false, message: "Not authorized to view this order" });
       }
 
-      if (order.consumer.toString() !== req.user.id &&
-          order.farmer.toString() !== req.user.id) {
-        console.log('❌ Unauthorized order access attempt:', {
-          orderId: req.params.id,
-          attemptedBy: req.user.id,
-          orderConsumer: order.consumer,
-          orderFarmer: order.farmer
-        });
-        return res.status(403).json({ 
-          success: false,
-          message: "Not authorized to view this order" 
-        });
-      }
-
-      console.log('✅ Order details retrieved:', {
-        orderId: order._id,
-        status: order.status,
-        itemCount: order.items.length
-      });
-
-      res.json({
-        success: true,
-        order: order
-      });
+      order._id = order.id;
+      res.json({ success: true, order });
     } catch (error) {
-      console.error('❌ Error fetching order details:', {
-        error: error.message,
-        orderId: req.params.id,
-        stack: error.stack
-      });
-
-      res.status(500).json({ 
-        success: false,
-        message: "Server error fetching order",
-        error: error.message
-      });
+      console.error('Error fetching order:', error);
+      res.status(500).json({ success: false, message: "Server error fetching order" });
     }
   },
 
   updateOrderStatus: async (req, res) => {
     try {
-      await ensureConnection();
-      
       const { id } = req.params;
       const { status } = req.body;
-      
-      console.log('📥 Updating order status:', {
-        orderId: id,
-        newStatus: status,
-        userId: req.user?.id
-      });
-      
       const validStatuses = ["placed", "accepted", "packed", "dispatched", "delivered", "cancelled"];
+      
       if (!validStatuses.includes(status)) {
-        console.log('❌ Invalid status attempted:', status);
-        return res.status(400).json({
-          success: false,
-          message: "Invalid status",
-          validStatuses
-        });
+        return res.status(400).json({ success: false, message: "Invalid status", validStatuses });
       }
 
-      const order = await Order.findById(id);
-      if (!order) {
-        console.log('❌ Order not found:', id);
-        return res.status(404).json({ 
-          success: false,
-          message: "Order not found" 
-        });
+      const { data: order, error: findError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (findError || !order) return res.status(404).json({ success: false, message: "Order not found" });
+
+      const userId = req.user?.id || req.user?._id;
+      if (order.farmer_id !== userId) {
+        return res.status(403).json({ success: false, message: "Not authorized to update this order" });
       }
 
-      if (order.farmer.toString() !== req.user.id) {
-        console.log('❌ Unauthorized status update attempt:', {
-          orderId: id,
-          attemptedBy: req.user.id,
-          orderFarmer: order.farmer
-        });
-        return res.status(403).json({ 
-          success: false,
-          message: "Not authorized to update this order" 
-        });
-      }
+      const { data: updatedOrder, error: updateError } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', id)
+        .select('*, consumer:users!orders_consumer_id_fkey(*), farmer:users!orders_farmer_id_fkey(*)')
+        .single();
+        
+      if (updateError) throw updateError;
+      updatedOrder._id = updatedOrder.id;
 
-      const oldStatus = order.status;
-      order.status = status;
-      await order.save();
-
-      await order.populate("consumer", "name email phone");
-      await order.populate("farmer", "name email phone");
-      await order.populate("items.product");
-
-      console.log('✅ Order status updated:', {
-        orderId: order._id,
-        oldStatus,
-        newStatus: status,
-        updatedBy: req.user.id
-      });
-
-      res.json({
-        success: true,
-        message: "Order status updated successfully",
-        order
-      });
+      res.json({ success: true, message: "Order status updated successfully", order: updatedOrder });
     } catch (error) {
-      console.error('❌ Error updating order status:', {
-        error: error.message,
-        orderId: req.params.id,
-        stack: error.stack
-      });
-
-      res.status(500).json({ 
-        success: false,
-        message: "Server error updating order status",
-        error: error.message
-      });
+      console.error('Error updating order:', error);
+      res.status(500).json({ success: false, message: "Server error updating order" });
     }
   }
 };
 
-// Helper function to generate tracking history based on order status and dates
 function generateTrackingHistory(order) {
   const trackingHistory = [];
-  const createdAt = new Date(order.createdAt);
+  const createdAt = new Date(order.created_at);
   
-  // Always start with order placed
   trackingHistory.push({
     timestamp: createdAt.toISOString(),
     description: 'Order placed',
@@ -535,9 +250,8 @@ function generateTrackingHistory(order) {
     status: 'completed'
   });
 
-  // Add status-based events
   if (['accepted', 'packed', 'dispatched', 'delivered'].includes(order.status)) {
-    const acceptedDate = new Date(createdAt.getTime() + 2 * 60 * 60 * 1000); // 2 hours after order
+    const acceptedDate = new Date(createdAt.getTime() + 2 * 60 * 60 * 1000);
     trackingHistory.push({
       timestamp: acceptedDate.toISOString(),
       description: 'Order confirmed',
@@ -547,7 +261,7 @@ function generateTrackingHistory(order) {
   }
 
   if (['packed', 'dispatched', 'delivered'].includes(order.status)) {
-    const packedDate = new Date(createdAt.getTime() + 4 * 60 * 60 * 1000); // 4 hours after order
+    const packedDate = new Date(createdAt.getTime() + 4 * 60 * 60 * 1000);
     trackingHistory.push({
       timestamp: packedDate.toISOString(),
       description: 'Order packed',
@@ -557,7 +271,7 @@ function generateTrackingHistory(order) {
   }
 
   if (['dispatched', 'delivered'].includes(order.status)) {
-    const dispatchedDate = new Date(createdAt.getTime() + 6 * 60 * 60 * 1000); // 6 hours after order
+    const dispatchedDate = new Date(createdAt.getTime() + 6 * 60 * 60 * 1000);
     trackingHistory.push({
       timestamp: dispatchedDate.toISOString(),
       description: 'Shipped',
@@ -567,11 +281,11 @@ function generateTrackingHistory(order) {
   }
 
   if (order.status === 'delivered') {
-    const deliveredDate = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24 hours after order
+    const deliveredDate = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
     trackingHistory.push({
       timestamp: deliveredDate.toISOString(),
       description: 'Delivered',
-      location: order.deliveryAddress || 'Your Address',
+      location: order.delivery_address || 'Your Address',
       status: 'completed'
     });
   }

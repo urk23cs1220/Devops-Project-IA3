@@ -1,32 +1,34 @@
-const Product = require('../models/Product.model');
+const supabase = require('../config/supabase');
 
-// Get all products
 exports.getProducts = async (req, res) => {
   try {
     const { category, search, page = 1, limit = 12 } = req.query;
     
-    let query = {};
-    if (category && category !== 'all') query.category = category;
+    let query = supabase.from('products').select('*, farmer:users!products_farmer_id_fkey(id, name, email, phone, address)', { count: 'exact' });
+
+    if (category && category !== 'all') {
+      query = query.eq('category', category);
+    }
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
     }
 
-    const products = await Product.find(query)
-      .populate('farmer', 'name email phone address')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
-    const total = await Product.countDocuments(query);
+    const { data: products, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    const mappedProducts = products.map(p => ({ ...p, _id: p.id }));
 
     res.json({
-      products,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      products: mappedProducts,
+      totalPages: Math.ceil((count || 0) / limit),
+      currentPage: parseInt(page),
+      total: count || 0
     });
   } catch (error) {
     console.error('Get products error:', error);
@@ -34,16 +36,19 @@ exports.getProducts = async (req, res) => {
   }
 };
 
-// Get single product
 exports.getProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .populate('farmer', 'name email phone address');
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('*, farmer:users!products_farmer_id_fkey(id, name, email, phone, address)')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!product) {
+    if (error || !product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-
+    
+    product._id = product.id;
     res.json(product);
   } catch (error) {
     console.error('Get product error:', error);
@@ -51,169 +56,122 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-// Create product
 exports.createProduct = async (req, res) => {
   try {
-    console.log('⭐ Creating product');
-    console.log('📝 Request body:', req.body);
-    console.log('🖼️ Request files:', req.files);
-    
-    // Check for required fields
     const requiredFields = ['title', 'description', 'category', 'pricePerUnit', 
                           'measuringUnit', 'minOrderQty', 'shelfLifeDays', 
                           'quantityAvailable', 'deliveryRadiusKm'];
     
     for (const field of requiredFields) {
-      if (!req.body[field]) {
-        console.error(`❌ Missing required field: ${field}`);
-        return res.status(400).json({ message: `${field} is required` });
-      }
+      if (!req.body[field]) return res.status(400).json({ message: `${field} is required` });
     }
 
-    // Validate and parse numeric fields
-    const numericFields = {
-      pricePerUnit: parseFloat(req.body.pricePerUnit),
-      minOrderQty: parseInt(req.body.minOrderQty),
-      shelfLifeDays: parseInt(req.body.shelfLifeDays),
-      quantityAvailable: parseInt(req.body.quantityAvailable),
-      deliveryRadiusKm: parseInt(req.body.deliveryRadiusKm)
-    };
-
-    // Validate numeric fields
-    for (const [key, value] of Object.entries(numericFields)) {
-      if (isNaN(value)) {
-        return res.status(400).json({ message: `Invalid ${key} value` });
-      }
-    }
-
-    // Process and validate images
-    const images = req.files.map(file => {
-      const imageUrl = `${req.protocol}://${req.get('host')}/uploads/products/${file.filename}`;
-      console.log('Processing file:', { filename: file.filename, url: imageUrl });
-      return imageUrl;
+    const images = (req.files || []).map(file => {
+      return `${req.protocol}://${req.get('host')}/uploads/products/${file.filename}`;
     });
 
     const productData = {
-      ...req.body,
-      ...numericFields,
-      farmer: req.user.id,
-      images: images
+      title: req.body.title,
+      description: req.body.description,
+      category: req.body.category,
+      price_per_unit: parseFloat(req.body.pricePerUnit),
+      measuring_unit: req.body.measuringUnit,
+      min_order_qty: parseInt(req.body.minOrderQty),
+      shelf_life_days: parseInt(req.body.shelfLifeDays),
+      quantity_available: parseInt(req.body.quantityAvailable),
+      delivery_radius_km: parseInt(req.body.deliveryRadiusKm),
+      farmer_id: req.user.id || req.user._id,
+      images: images,
+      location: { type: 'Point', coordinates: [77.5946, 12.9716] }
     };
 
-    console.log('Final product data:', productData);
+    const { data: product, error } = await supabase
+      .from('products')
+      .insert([productData])
+      .select('*, farmer:users!products_farmer_id_fkey(id, name, email, phone, address)')
+      .single();
 
-    const product = new Product(productData);
-    await product.save();
+    if (error) throw error;
+    product._id = product.id;
 
-    await product.populate('farmer', 'name email phone address');
-
-    console.log('Product saved successfully:', product);
-
-    res.status(201).json({
-      message: 'Product created successfully',
-      product
-    });
+    res.status(201).json({ message: 'Product created successfully', product });
   } catch (error) {
     console.error('Create product error:', error);
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ 
-        message: 'Validation error', 
-        errors: Object.keys(error.errors).reduce((acc, key) => {
-          acc[key] = error.errors[key].message;
-          return acc;
-        }, {})
-      });
-    }
     res.status(500).json({ message: 'Server error creating product', error: error.message });
   }
 };
 
-// Update product
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const { data: product, error: findError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
     
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+    if (findError || !product) return res.status(404).json({ message: 'Product not found' });
 
-    // Check if user owns the product
-    if (product.farmer.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    const userId = req.user.id || req.user._id;
+    if (product.farmer_id !== userId) return res.status(403).json({ message: 'Access denied' });
 
-    // Parse existingImages from JSON string if it exists
     let existingImages = [];
     try {
       existingImages = req.body.existingImages ? JSON.parse(req.body.existingImages) : [];
-    } catch (error) {
-      console.error('Error parsing existingImages:', error);
+    } catch (e) {
       existingImages = [];
     }
 
-    // Handle uploaded files
     let images = existingImages;
     if (req.files && req.files.length > 0) {
       const newImages = req.files.map(file => `/uploads/products/${file.filename}`);
       images = [...images, ...newImages];
     }
 
-    // Convert numeric fields
-    const numericFields = {
-      pricePerUnit: parseFloat(req.body.pricePerUnit),
-      minOrderQty: parseInt(req.body.minOrderQty),
-      shelfLifeDays: parseInt(req.body.shelfLifeDays),
-      quantityAvailable: parseInt(req.body.quantityAvailable),
-      deliveryRadiusKm: parseInt(req.body.deliveryRadiusKm)
-    };
-
-    // Validate numeric fields
-    for (const [key, value] of Object.entries(numericFields)) {
-      if (isNaN(value)) {
-        return res.status(400).json({ message: `Invalid ${key} value` });
-      }
-    }
-
-    // Update product data
     const updatedData = {
-      title: req.body.title,
-      description: req.body.description,
-      category: req.body.category,
-      measuringUnit: req.body.measuringUnit,
-      ...numericFields,
+      title: req.body.title || product.title,
+      description: req.body.description || product.description,
+      category: req.body.category || product.category,
+      measuring_unit: req.body.measuringUnit || product.measuring_unit,
+      price_per_unit: req.body.pricePerUnit ? parseFloat(req.body.pricePerUnit) : product.price_per_unit,
+      min_order_qty: req.body.minOrderQty ? parseInt(req.body.minOrderQty) : product.min_order_qty,
+      shelf_life_days: req.body.shelfLifeDays ? parseInt(req.body.shelfLifeDays) : product.shelf_life_days,
+      quantity_available: req.body.quantityAvailable ? parseInt(req.body.quantityAvailable) : product.quantity_available,
+      delivery_radius_km: req.body.deliveryRadiusKm ? parseInt(req.body.deliveryRadiusKm) : product.delivery_radius_km,
       images: images
     };
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true, runValidators: true }
-    ).populate('farmer', 'name email phone address');
+    const { data: updatedProduct, error: updateError } = await supabase
+      .from('products')
+      .update(updatedData)
+      .eq('id', req.params.id)
+      .select('*, farmer:users!products_farmer_id_fkey(id, name, email, phone, address)')
+      .single();
 
-    res.json({
-      message: 'Product updated successfully',
-      product: updatedProduct
-    });
+    if (updateError) throw updateError;
+    updatedProduct._id = updatedProduct.id;
+
+    res.json({ message: 'Product updated successfully', product: updatedProduct });
   } catch (error) {
     console.error('Update product error:', error);
     res.status(500).json({ message: 'Server error updating product' });
   }
 };
 
-// Delete product
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const { data: product, error: findError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
     
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+    if (findError || !product) return res.status(404).json({ message: 'Product not found' });
 
-    if (product.farmer.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    const userId = req.user.id || req.user._id;
+    if (product.farmer_id !== userId) return res.status(403).json({ message: 'Access denied' });
 
-    await Product.findByIdAndDelete(req.params.id);
+    const { error: deleteError } = await supabase.from('products').delete().eq('id', req.params.id);
+    if (deleteError) throw deleteError;
 
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
@@ -222,13 +180,20 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-// Get farmer's products
 exports.getFarmerProducts = async (req, res) => {
   try {
-    const products = await Product.find({ farmer: req.user.id })
-      .sort({ createdAt: -1 });
+    const userId = req.user.id || req.user._id;
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('farmer_id', userId)
+      .order('created_at', { ascending: false });
 
-    res.json(products);
+    if (error) throw error;
+    
+    const mappedProducts = products.map(p => ({ ...p, _id: p.id }));
+
+    res.json(mappedProducts);
   } catch (error) {
     console.error('Get farmer products error:', error);
     res.status(500).json({ message: 'Server error' });

@@ -2,19 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const connectDB = require('./config/db');
+const supabase = require('./config/supabase');
 
 const app = express();
-
-// Connect to database with error handling
-(async () => {
-  try {
-    await connectDB();
-  } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
-    process.exit(1);
-  }
-})();
 
 // Middleware
 
@@ -65,9 +55,7 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// MODELS
-const User = require('./models/User.model');
-const Product = require('./models/Product.model');
+// Supabase logic is handled inline in this file or imported from controllers
 
 // Import routes
 const productRoutes = require('./routes/products.routes');
@@ -82,39 +70,47 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/debug', debugRoutes);
 }
 
-// AUTH ROUTES - Direct implementation for simplicity
+// AUTH ROUTES - Supabase Implementation
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { name, email, password, role, phone, address } = req.body;
     console.log('✅ Signup attempt:', { name, email, role });
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .single();
+      
     if (existingUser) {
-      return res.status(400).json({ 
-        message: 'User already exists with this email' 
-      });
+      return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Create new user
-    const user = new User({
-      name,
-      email,
-      passwordHash: password, // For demo, using plain password
-      role: role || 'consumer',
-      phone: phone || '',
-      address: address || '',
-      location: { type: 'Point', coordinates: [0, 0] }
-    });
+    // Create new user 
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert([{
+        name,
+        email,
+        password_hash: password, // For demo, using plain password
+        role: role || 'consumer',
+        phone: phone || '',
+        address: address || '',
+        location: { type: 'Point', coordinates: [0, 0] }
+      }])
+      .select()
+      .single();
 
-    await user.save();
-    console.log('✅ User saved to MongoDB:', user._id);
+    if (error) throw error;
+    console.log('✅ User saved to Supabase:', user.id);
 
     res.json({
       message: 'Signup successful!',
-      token: `demo-token-${user._id.toString()}-${Date.now()}`,
+      token: `demo-token:::${user.id}:::${Date.now()}`,
       user: {
-        id: user._id,
+        id: user.id,
+        _id: user.id, // for frontend backwards compatibility
         name: user.name,
         email: user.email,
         role: user.role,
@@ -124,10 +120,7 @@ app.post('/api/auth/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Signup error:', error);
-    res.status(500).json({ 
-      message: 'Signup error',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Signup error', error: error.message });
   }
 });
 
@@ -137,26 +130,27 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('✅ Login attempt:', { email });
     
     // Find user in database
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid email or password' 
-      });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error || !user) {
+      return res.status(400).json({ message: 'Invalid email or password' });
     }
 
-    // Simple password check (direct comparison for demo)
-    if (user.passwordHash !== password) {
-      return res.status(400).json({ 
-        message: 'Invalid email or password' 
-      });
+    // Simple password check
+    if (user.password_hash !== password) {
+      return res.status(400).json({ message: 'Invalid email or password' });
     }
 
-    // Return success with demo token
     const response = {
       message: 'Login successful!',
-      token: `demo-token-${user._id.toString()}-${Date.now()}`,
+      token: `demo-token:::${user.id}:::${Date.now()}`,
       user: {
-        id: user._id.toString(),
+        id: user.id,
+        _id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -165,15 +159,12 @@ app.post('/api/auth/login', async (req, res) => {
       }
     };
 
-    console.log('✅ Login successful, returning:', response);
+    console.log('✅ Login successful, returning:', user.id);
     res.json(response);
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ 
-      message: 'Login error',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Login error', error: error.message });
   }
 });
 
@@ -184,191 +175,62 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', async (req, res) => {
   try {
-    console.log('✅ Get current user request');
     const raw = req.header('Authorization') || '';
     const token = raw.replace('Bearer ', '').trim();
 
-    if (token && token.startsWith('demo-token-')) {
-      const parts = token.split('-');
-      const possibleId = parts[2];
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    if (token.startsWith('demo-token:::')) {
+      const parts = token.split(':::');
+      const possibleId = parts[1]; // Index 1 is the ID after 'demo-token'
       if (possibleId) {
-        const userById = await User.findById(possibleId).select('-passwordHash');
-        if (userById) return res.json({ user: userById });
+        const { data: userById, error } = await supabase
+          .from('users')
+          .select('id, name, email, role, phone, address, location')
+          .eq('id', possibleId)
+          .single();
+          
+        if (!error && userById) {
+          userById._id = userById.id;
+          return res.json({ user: userById });
+        }
       }
     }
 
-    // Fallback: return the first user from database (demo)
-    const user = await User.findOne().select('-passwordHash');
-    if (!user) {
-      return res.json({
-        user: {
-          id: 'demo-user-id',
-          name: 'Demo User',
-          email: 'demo@example.com',
-          role: 'consumer'
-        }
-      });
-    }
-
-    res.json({ user });
+    // No fallback - if token is invalid or user not found, return unauthorized
+    return res.status(401).json({ message: 'Token is invalid or session expired' });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Error fetching user' });
   }
 });
 
-// AUTH ROUTES - UPDATED TO SAVE TO MONGODB
-app.post('/api/auth/signup', async (req, res) => {
-  try {
-    const { name, email, password, role, phone, address } = req.body;
-    console.log('✅ Signup attempt:', { name, email, role });
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ 
-        message: 'User already exists with this email' 
-      });
-    }
-
-    // Create new user (for demo, we'll use plain password)
-    // In production, you should hash the password with bcrypt
-    const user = new User({
-      name,
-      email,
-      passwordHash: password, // In real app, hash this with bcrypt
-      role: role || 'consumer',
-      phone: phone || '',
-      address: address || '',
-      location: { type: 'Point', coordinates: [0, 0] }
-    });
-
-    await user.save();
-    console.log('✅ User saved to MongoDB:', user._id);
-
-    res.json({
-      message: 'Signup successful!',
-      // Include the user id in the demo token so the auth middleware can restore the user
-      token: `demo-token-${user._id.toString()}-${Date.now()}`,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        address: user.address
-      }
-    });
-  } catch (error) {
-    console.error('❌ Signup error:', error);
-    res.status(500).json({ 
-      message: 'Signup error',
-      error: error.message 
-    });
-  }
-});
-
-// UPDATED LOGIN ROUTE - FIXED
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    console.log('✅ Login attempt:', { email });
-    
-    // Find user in database
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid email or password' 
-      });
-    }
-
-    // Simple password check (in real app, use bcrypt.compare)
-    if (user.passwordHash !== password) {
-      return res.status(400).json({ 
-        message: 'Invalid email or password' 
-      });
-    }
-
-    // Return the exact format that frontend expects
-    // Include user id in demo token so middleware can restore user
-    const response = {
-      message: 'Login successful!',
-      token: `demo-token-${user._id.toString()}-${Date.now()}`,
-      user: {
-        id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone || '',
-        address: user.address || ''
-      }
-    };
-
-    console.log('✅ Login successful, returning:', response);
-    res.json(response);
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ 
-      message: 'Login error',
-      error: error.message 
-    });
-  }
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  console.log('✅ Logout request');
-  res.json({ message: 'Logout successful' });
-});
-
-app.get('/api/auth/me', async (req, res) => {
-  try {
-    console.log('✅ Get current user request');
-    // Try to detect demo token and return that user if possible
-    const raw = req.header('Authorization') || '';
-    const token = raw.replace('Bearer ', '').trim();
-
-    if (token && token.startsWith('demo-token-')) {
-      const parts = token.split('-');
-      const possibleId = parts[2];
-      if (possibleId) {
-        const userById = await User.findById(possibleId).select('-passwordHash');
-        if (userById) return res.json({ user: userById });
-      }
-    }
-
-    // Fallback: return the first user from database (demo)
-    const user = await User.findOne().select('-passwordHash');
-    if (!user) {
-      return res.json({
-        user: {
-          id: 'demo-user-id',
-          name: 'Demo User',
-          email: 'demo@example.com',
-          role: 'consumer'
-        }
-      });
-    }
-
-    res.json({ user });
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ message: 'Error fetching user' });
-  }
-});
-
-// PRODUCT ROUTES
-// Get all products (for consumers)
+// PRODUCT ROUTES (mapped to Supabase)
 app.get('/api/products', async (req, res) => {
   try {
     console.log('📦 Fetching all products');
     
-    const products = await Product.find().populate('farmer', 'name email');
+    // Join with users table to get farmer details
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*, farmer:users(id, name, email)');
+      
+    if (error) throw error;
     
+    // map id to _id
+    const mappedProducts = products.map(p => ({
+      ...p,
+      _id: p.id,
+      farmer: p.farmer ? { ...p.farmer, _id: p.farmer.id } : null
+    }));
+
     res.json({
-      products: products.length > 0 ? products : [
+      products: mappedProducts.length > 0 ? mappedProducts : [
         {
           _id: 'demo-product-1',
+          id: 'demo-product-1',
           title: 'Organic Tomatoes',
           description: 'Fresh organic tomatoes from local farm',
           category: 'Vegetables',
@@ -388,7 +250,7 @@ app.get('/api/products', async (req, res) => {
       ],
       totalPages: 1,
       currentPage: 1,
-      total: products.length > 0 ? products.length : 1
+      total: mappedProducts.length > 0 ? mappedProducts.length : 1
     });
   } catch (error) {
     console.error('Get products error:', error);
@@ -396,27 +258,49 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Create product (for farmers)
 app.post('/api/products', async (req, res) => {
   try {
     console.log('📦 Creating product:', req.body);
     
     // Get a farmer user from database to associate with the product
-    const farmerUser = await User.findOne({ role: 'farmer' });
-    const farmerId = farmerUser ? farmerUser._id : '65a1b2c3d4e5f6a7b8c9d0e1';
+    const { data: farmerUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'farmer')
+      .limit(1)
+      .single();
+      
+    const farmerId = farmerUser ? farmerUser.id : null;
+
+    if (!farmerId) {
+      return res.status(400).json({ message: 'No farmer found to associate product with.' });
+    }
 
     const productData = {
-      ...req.body,
-      farmer: farmerId,
+      title: req.body.title,
+      description: req.body.description,
+      category: req.body.category,
+      price_per_unit: req.body.pricePerUnit,
+      measuring_unit: req.body.measuringUnit,
+      min_order_qty: req.body.minOrderQty,
+      shelf_life_days: req.body.shelfLifeDays,
+      quantity_available: req.body.quantityAvailable,
+      delivery_radius_km: req.body.deliveryRadiusKm,
+      farmer_id: farmerId,
       location: { type: 'Point', coordinates: [77.5946, 12.9716] },
       images: []
     };
 
-    const product = new Product(productData);
-    await product.save();
+    const { data: product, error } = await supabase
+      .from('products')
+      .insert([productData])
+      .select('*, farmer:users(id, name, email)')
+      .single();
 
-    // Populate farmer details
-    await product.populate('farmer', 'name email');
+    if (error) throw error;
+
+    product._id = product.id;
+    if (product.farmer) product.farmer._id = product.farmer.id;
 
     res.status(201).json({
       message: 'Product created successfully!',
@@ -431,31 +315,47 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-// Get farmer's products
 app.get('/api/products/farmer/my-products', async (req, res) => {
   try {
     console.log('👨‍🌾 Fetching farmer products');
     
-    // Get farmer ID from database or use demo ID
-    const farmerUser = await User.findOne({ role: 'farmer' });
-    const farmerId = farmerUser ? farmerUser._id : '65a1b2c3d4e5f6a7b8c9d0e1';
+    const { data: farmerUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'farmer')
+      .limit(1)
+      .single();
+      
+    if (!farmerUser) return res.json([]);
 
-    const products = await Product.find({ farmer: farmerId })
-      .sort({ createdAt: -1 });
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('farmer_id', farmerUser.id)
+      .order('created_at', { ascending: false });
 
-    res.json(products);
+    if (error) throw error;
+
+    const mappedProducts = products.map(p => ({ ...p, _id: p.id }));
+
+    res.json(mappedProducts);
   } catch (error) {
     console.error('Get farmer products error:', error);
     res.status(500).json({ message: 'Error fetching farmer products' });
   }
 });
 
-// Delete product
 app.delete('/api/products/:id', async (req, res) => {
   try {
     console.log('🗑️ Deleting product:', req.params.id);
     
-    await Product.findByIdAndDelete(req.params.id);
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', req.params.id);
+      
+    if (error) throw error;
+    
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Delete product error:', error);

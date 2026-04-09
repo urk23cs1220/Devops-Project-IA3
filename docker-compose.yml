@@ -1,14 +1,4 @@
 services:
-  mongodb:
-    image: mongo:latest
-    container_name: agrolink-mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - agrolink-network
-
   backend:
     build:
       context: ./server
@@ -18,14 +8,13 @@ services:
       - "7000:7000"
     environment:
       - PORT=7000
-      - MONGODB_URI=mongodb://mongodb:27017/agrolink
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
       - NODE_ENV=development
       # Note: For production you would set JWT_SECRET and OPENWEATHER_API_KEY as well
       - JWT_SECRET=a788b287d778888b29642264814fdccf7061040b82c091a4dae29b2127a749ac
       - OPENWEATHER_API_KEY=741e291841cd4c6a9dc120512252610
       - CLIENT_URL=http://localhost:3000
-    depends_on:
-      - mongodb
     networks:
       - agrolink-network
 
@@ -44,9 +33,6 @@ services:
       - backend
     networks:
       - agrolink-network
-
-volumes:
-  mongodb_data:
 
 networks:
   agrolink-network:
