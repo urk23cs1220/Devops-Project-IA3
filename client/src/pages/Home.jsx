@@ -15,7 +15,7 @@ const Home = () => {
           <Row className="align-items-center min-vh-50">
             <Col lg={6} className="fade-in">
               <h1 className="display-4 fw-bold mb-4 text-white">
-                🌱 Agro-Link
+                🌱 Agro-Link Pro
               </h1>
               <p className="lead mb-4 text-light">
                 Connecting Farmers Directly with Consumers.

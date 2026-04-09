@@ -18,7 +18,7 @@ spec:
       containers:
       - name: backend
         # Using a variable for Docker Hub username - replace with yours or use CI/CD substitution
-        image: DOCKER_HUB_USERNAME/agrolink-backend:latest
+        image: deepak56006/agrolink-backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 7000

@@ -16,8 +16,8 @@ spec:
         app: frontend
     spec:
       containers:
-      - name: frontend
-        image: DOCKER_HUB_USERNAME/agrolink-frontend:latest
+      - name: agrolink-frontend
+        image: deepak56006/agrolink-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -34,4 +34,4 @@ spec:
   ports:
   - port: 80
     targetPort: 80
-    nodePort: 30000
+    nodePort: 31000
