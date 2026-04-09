@@ -20,10 +20,7 @@ api.interceptors.request.use(
     }
     
     // Log outgoing requests for debugging
-    console.log(`🚀 [API] ${config.method?.toUpperCase()} ${config.url}`, {
-      data: config.data,
-      headers: config.headers
-    });
+    console.log(`🚀 [API] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     
     return config;
   },
@@ -35,7 +32,20 @@ api.interceptors.request.use(
 // Response interceptor to handle errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ [API] ${response.config.method?.toUpperCase()} ${response.config.url} - Success:`, response.data);
+    // Special handling for orders endpoint to debug response format
+    if (response.config.url.includes('/api/orders/farmer')) {
+      console.log(`✅ [API] ${response.config.method?.toUpperCase()} ${response.config.url} - Response Type:`, typeof response.data);
+      console.log(`📦 [ORDERS] Raw response data:`, response.data);
+      console.log(`📦 [ORDERS] Is Array?`, Array.isArray(response.data));
+      if (response.data && typeof response.data === 'object') {
+        console.log(`📦 [ORDERS] Object keys:`, Object.keys(response.data));
+        Object.keys(response.data).forEach(key => {
+          console.log(`📦 [ORDERS] Key "${key}" type:`, typeof response.data[key], 'isArray:', Array.isArray(response.data[key]));
+        });
+      }
+    } else {
+      console.log(`✅ [API] ${response.config.method?.toUpperCase()} ${response.config.url} - Success:`, response.data);
+    }
     return response;
   },
   (error) => {

@@ -1,0 +1,61 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Step: Setup Node.js (Optional but good for testing)
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    # Step: Build Docker Images
+    - name: Build Backend Image
+      run: docker build -t agrolink-backend:latest ./server
+
+    - name: Build Frontend Image
+      run: docker build -t agrolink-frontend:latest ./client --build-arg VITE_API_URL=http://localhost:30000
+
+    # Optional: Push to DockerHub (Skipping actual push for local minikube focus, but keeping structure)
+    # - name: Log in to Docker Hub
+    #   uses: docker/login-action@v2
+    #   with:
+    #     username: ${{ secrets.DOCKER_USERNAME }}
+    #     password: ${{ secrets.DOCKER_PASSWORD }}
+    # 
+    # - name: Push images
+    #   run: |
+    #     docker tag agrolink-backend:latest ${{ secrets.DOCKER_USERNAME }}/agrolink-backend:latest
+    #     docker push ${{ secrets.DOCKER_USERNAME }}/agrolink-backend:latest
+
+    # Step: Setup Minikube/Kubectl for Local Deployment testing in GitHub Actions
+    - name: Set up Minikube
+      uses: medyagh/setup-minikube@master
+
+    - name: Load local images into minikube
+      run: |
+        minikube image load agrolink-backend:latest
+        minikube image load agrolink-frontend:latest
+
+    # Step: Deploy to Kubernetes
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/mongo.yaml
+        kubectl apply -f k8s/backend.yaml
+        kubectl apply -f k8s/frontend.yaml
+        
+    - name: Verify Deployment
+      run: |
+        kubectl get pods
+        kubectl get svc

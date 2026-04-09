@@ -1,0 +1,53 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: agrolink-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - agrolink-network
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: agrolink-backend
+    ports:
+      - "7000:7000"
+    environment:
+      - PORT=7000
+      - MONGODB_URI=mongodb://mongodb:27017/agrolink
+      - NODE_ENV=development
+      # Note: For production you would set JWT_SECRET and OPENWEATHER_API_KEY as well
+      - JWT_SECRET=a788b287d778888b29642264814fdccf7061040b82c091a4dae29b2127a749ac
+      - OPENWEATHER_API_KEY=741e291841cd4c6a9dc120512252610
+      - CLIENT_URL=http://localhost:3000
+    depends_on:
+      - mongodb
+    networks:
+      - agrolink-network
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        # In docker-compose, we can just point VITE to backend exposed on localhost for testing locally
+        # or use nginx proxy. We are exposing 7000 to localhost, so this works for local browser.
+        - VITE_API_URL=http://localhost:7000
+    container_name: agrolink-frontend
+    ports:
+      - "3000:80" # Exposed on port 3000
+    depends_on:
+      - backend
+    networks:
+      - agrolink-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  agrolink-network:
+    driver: bridge

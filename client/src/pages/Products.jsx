@@ -29,7 +29,7 @@ const Products = () => {
   });
 
   const { addToCart } = useCart();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const debouncedFetch = useCallback(
     debounce((searchValue) => {
@@ -62,7 +62,19 @@ const Products = () => {
       const response = await api.get(`/api/products?${params}`);
       console.log('✅ Products response:', response.data);
       
-      setProducts(response.data.products || []);
+      // Handle different response formats
+      let productsData = [];
+      if (Array.isArray(response.data)) {
+        productsData = response.data;
+      } else if (response.data && Array.isArray(response.data.products)) {
+        productsData = response.data.products;
+      } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        productsData = response.data.data;
+      } else {
+        productsData = [];
+      }
+      
+      setProducts(productsData);
     } catch (error) {
       console.error('❌ Error fetching products:', error);
       setError('Failed to load products. Please try again.');
@@ -72,14 +84,30 @@ const Products = () => {
     }
   };
 
-  const handleAddToCart = (product) => {
+  const handleAddToCart = async (product) => {
     if (!isAuthenticated) {
       toast.error('Please login to add items to cart');
+      navigate('/login');
       return;
     }
 
-    addToCart(product, product.minOrderQty);
-    toast.success('Product added to cart successfully');
+    if (user?.role !== 'consumer') {
+      toast.error('Only consumers can add products to cart');
+      return;
+    }
+
+    if (product.quantityAvailable < product.minOrderQty) {
+      toast.error(`Not enough stock available. Only ${product.quantityAvailable} ${product.measuringUnit} left.`);
+      return;
+    }
+
+    try {
+      addToCart(product, product.minOrderQty);
+      toast.success(`${product.title} added to cart successfully`);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast.error('Failed to add product to cart');
+    }
   };
 
   if (loading) {
@@ -125,12 +153,13 @@ const Products = () => {
               onChange={(e) => setFilters({ ...filters, category: e.target.value })}
             >
               <option value="all">All Categories</option>
-              <option value="Rice">Rice</option>
               <option value="Vegetables">Vegetables</option>
               <option value="Fruits">Fruits</option>
+              <option value="Rice">Rice</option>
               <option value="Grains">Grains</option>
               <option value="Dairy">Dairy</option>
               <option value="Spices">Spices</option>
+              <option value="Other">Other</option>
             </Form.Select>
           </Form.Group>
         </Col>
@@ -190,7 +219,7 @@ const Products = () => {
                       Min: {product.minOrderQty} {product.measuringUnit}
                     </small>
                     <small className="text-muted">
-                      Available: {product.quantityAvailable}
+                      Available: {product.quantityAvailable} {product.measuringUnit}
                     </small>
                   </div>
 
@@ -208,10 +237,11 @@ const Products = () => {
                       variant="success"
                       size="sm"
                       onClick={() => handleAddToCart(product)}
-                      disabled={!isAuthenticated || product.quantityAvailable === 0}
+                      disabled={!isAuthenticated || user?.role !== 'consumer' || product.quantityAvailable === 0}
                       className="flex-fill"
                     >
                       {!isAuthenticated ? 'Login to Buy' : 
+                       user?.role !== 'consumer' ? 'Farmers Cannot Buy' :
                        product.quantityAvailable === 0 ? 'Out of Stock' : 'Add to Cart'}
                     </Button>
                   </div>

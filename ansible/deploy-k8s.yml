@@ -1,0 +1,36 @@
+---
+- name: Automate AgroLink Kubernetes Deployment
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Apply MongoDB Deployment and Service
+      command: kubectl apply -f ../k8s/mongo.yaml
+      register: mongo_result
+
+    - name: Show MongoDB Apply Result
+      debug:
+        var: mongo_result.stdout
+
+    - name: Apply Backend Deployment and Service
+      command: kubectl apply -f ../k8s/backend.yaml
+      register: backend_result
+
+    - name: Show Backend Apply Result
+      debug:
+        var: backend_result.stdout
+
+    - name: Apply Frontend Deployment and Service
+      command: kubectl apply -f ../k8s/frontend.yaml
+      register: frontend_result
+
+    - name: Show Frontend Apply Result
+      debug:
+        var: frontend_result.stdout
+
+    - name: Verify all pods
+      command: kubectl get pods
+      register: pods_result
+
+    - name: Show Pods
+      debug:
+        var: pods_result.stdout

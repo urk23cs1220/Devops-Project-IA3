@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Table, Button, Badge, Modal, Form, Alert, Spinner, Nav, Tab, Dropdown } from 'react-bootstrap';
+import { Container, Row, Col, Card, Table, Button, Badge, Modal, Form, Alert, Spinner, Nav, Tab } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../services/api';
@@ -16,6 +16,7 @@ const FarmerDashboard = () => {
   const [images, setImages] = useState([]);
   const [imageErrors, setImageErrors] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
   const [newProduct, setNewProduct] = useState({
     title: '',
     description: '',
@@ -38,10 +39,34 @@ const FarmerDashboard = () => {
     try {
       setOrderLoading(true);
       const response = await api.get('/api/orders/farmer');
-      setOrders(response.data);
+      
+      // Handle different response formats
+      let ordersData = [];
+      
+      if (Array.isArray(response.data)) {
+        ordersData = response.data;
+      } else if (response.data && Array.isArray(response.data.orders)) {
+        ordersData = response.data.orders;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        ordersData = response.data.data;
+      } else {
+        console.warn('Unexpected orders response format:', response.data);
+        // Try to find any array in the response
+        const arrayKeys = Object.keys(response.data).filter(key => 
+          Array.isArray(response.data[key])
+        );
+        if (arrayKeys.length > 0) {
+          ordersData = response.data[arrayKeys[0]];
+        } else {
+          ordersData = [];
+        }
+      }
+      
+      setOrders(ordersData);
     } catch (error) {
       console.error('Error loading orders:', error);
       toast.error('Failed to load orders');
+      setOrders([]);
     } finally {
       setOrderLoading(false);
     }
@@ -51,7 +76,34 @@ const FarmerDashboard = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/products/farmer/my-products');
-      setProducts(response.data);
+      
+      console.log('📦 Raw products response:', response.data);
+      
+      let productsData = [];
+      if (Array.isArray(response.data)) {
+        productsData = response.data;
+      } else if (response.data && Array.isArray(response.data.products)) {
+        productsData = response.data.products;
+      } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        productsData = response.data.data;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        productsData = response.data.data;
+      } else {
+        console.warn('Unexpected products response format:', response.data);
+        // Try to extract any array from the response
+        const arrayKeys = Object.keys(response.data).filter(key => 
+          Array.isArray(response.data[key])
+        );
+        if (arrayKeys.length > 0) {
+          productsData = response.data[arrayKeys[0]];
+          console.log(`Using products data from property: ${arrayKeys[0]}`);
+        } else {
+          productsData = [];
+        }
+      }
+      
+      console.log('📦 Processed products data:', productsData);
+      setProducts(productsData);
     } catch (error) {
       console.error('Error loading products:', error);
       toast.error('Failed to load products');
@@ -60,16 +112,48 @@ const FarmerDashboard = () => {
     }
   };
 
+  const validateForm = (productData) => {
+    const errors = {};
+
+    if (!productData.title?.trim()) {
+      errors.title = 'Product title is required';
+    }
+
+    if (!productData.description?.trim()) {
+      errors.description = 'Description is required';
+    }
+
+    if (!productData.pricePerUnit || parseFloat(productData.pricePerUnit) <= 0) {
+      errors.pricePerUnit = 'Valid price is required';
+    }
+
+    if (!productData.minOrderQty || parseFloat(productData.minOrderQty) < 1) {
+      errors.minOrderQty = 'Minimum order quantity must be at least 1';
+    }
+
+    if (!productData.quantityAvailable || parseFloat(productData.quantityAvailable) < 0) {
+      errors.quantityAvailable = 'Valid quantity is required';
+    }
+
+    if (!productData.shelfLifeDays || parseInt(productData.shelfLifeDays) < 1) {
+      errors.shelfLifeDays = 'Shelf life must be at least 1 day';
+    }
+
+    if (!productData.deliveryRadiusKm || parseInt(productData.deliveryRadiusKm) < 1) {
+      errors.deliveryRadiusKm = 'Delivery radius must be at least 1 km';
+    }
+
+    return errors;
+  };
+
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     
-    // Validate number of images
     if (files.length + images.length > 5) {
       setImageErrors('Maximum 5 images allowed');
       return;
     }
 
-    // Validate file types and sizes
     const invalidFile = files.find(file => 
       !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024
     );
@@ -89,142 +173,162 @@ const FarmerDashboard = () => {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
+    setFormErrors({});
+
+    // Validate images
+    if (images.length === 0) {
+      toast.error('Please upload at least one image');
+      return;
+    }
+
+    // Validate form fields
+    const errors = validateForm(newProduct);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error('Please fix the form errors');
+      return;
+    }
+
     try {
-      // Validate images
-      if (images.length === 0) {
-        toast.error('Please upload at least one image');
-        return;
-      }
-
-      // Validate all required fields
-      const requiredFields = {
-        title: 'Product title',
-        description: 'Description',
-        category: 'Category',
-        pricePerUnit: 'Price per unit',
-        measuringUnit: 'Unit',
-        minOrderQty: 'Minimum order quantity',
-        shelfLifeDays: 'Shelf life',
-        quantityAvailable: 'Quantity available',
-        deliveryRadiusKm: 'Delivery radius'
-      };
-
-      for (const [key, label] of Object.entries(requiredFields)) {
-        if (!newProduct[key]) {
-          toast.error(`${label} is required`);
-          return;
-        }
-      }
-
       // Create form data
       const formData = new FormData();
 
-      // Add product data with type conversion
-      for (const [key, value] of Object.entries(newProduct)) {
-        // Convert numeric fields
-        if (['pricePerUnit', 'minOrderQty', 'shelfLifeDays', 'quantityAvailable', 'deliveryRadiusKm'].includes(key)) {
-          formData.append(key, Number(value));
-        } else {
-          formData.append(key, value);
-        }
-      }
+      // Add product data
+      formData.append('title', newProduct.title.trim());
+      formData.append('description', newProduct.description.trim());
+      formData.append('category', newProduct.category);
+      formData.append('measuringUnit', newProduct.measuringUnit);
+      formData.append('pricePerUnit', parseFloat(newProduct.pricePerUnit));
+      formData.append('minOrderQty', parseFloat(newProduct.minOrderQty));
+      formData.append('shelfLifeDays', parseInt(newProduct.shelfLifeDays));
+      formData.append('quantityAvailable', parseFloat(newProduct.quantityAvailable));
+      formData.append('deliveryRadiusKm', parseInt(newProduct.deliveryRadiusKm));
 
       // Add images
-      images.forEach((image, index) => {
+      images.forEach((image) => {
         formData.append('images', image);
       });
 
-      console.log('Submitting product...');
-      for (let [key, value] of formData.entries()) {
-        if (key === 'images') {
-          console.log(`Image ${value.name}:`, {
-            type: value.type,
-            size: value.size,
-            lastModified: new Date(value.lastModified).toISOString()
-          });
-        } else {
-          console.log(`${key}:`, value);
-        }
-      }
-
-      // Submit the form
-      const response = await api.post('/api/products', formData);
-      
-      console.log('✅ API Response:', response.data);
-      
-      // Add the new product to the list
-      setProducts([...products, response.data.product]);
-      setShowAddModal(false);
-      
-      // Reset form
-      setNewProduct({
-        title: '',
-        description: '',
-        category: 'Vegetables',
-        pricePerUnit: '',
-        measuringUnit: 'kg',
-        minOrderQty: '',
-        shelfLifeDays: '',
-        quantityAvailable: '',
-        deliveryRadiusKm: '10'
+      console.log('🔄 Adding product...');
+      const response = await api.post('/api/products', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      setImages([]);
       
-      toast.success('Product added successfully!');
+      console.log('✅ Product API response:', response.data);
+      
+      // Handle different response formats
+      let addedProduct = null;
+      
+      if (response.data.product) {
+        addedProduct = response.data.product;
+      } else if (response.data.data) {
+        addedProduct = response.data.data;
+      } else if (response.data) {
+        // If the response itself is the product
+        addedProduct = response.data;
+      }
+      
+      if (addedProduct) {
+        // Add the new product to the list
+        setProducts(prevProducts => [...prevProducts, addedProduct]);
+        setShowAddModal(false);
+        
+        // Reset form
+        setNewProduct({
+          title: '',
+          description: '',
+          category: 'Vegetables',
+          pricePerUnit: '',
+          measuringUnit: 'kg',
+          minOrderQty: '',
+          shelfLifeDays: '',
+          quantityAvailable: '',
+          deliveryRadiusKm: '10'
+        });
+        setImages([]);
+        setFormErrors({});
+        
+        toast.success('Product added successfully!');
+      } else {
+        // If no product data in response but request was successful
+        console.log('✅ Product added successfully (no product data in response)');
+        toast.success('Product added successfully!');
+        setShowAddModal(false);
+        
+        // Reset form
+        setNewProduct({
+          title: '',
+          description: '',
+          category: 'Vegetables',
+          pricePerUnit: '',
+          measuringUnit: 'kg',
+          minOrderQty: '',
+          shelfLifeDays: '',
+          quantityAvailable: '',
+          deliveryRadiusKm: '10'
+        });
+        setImages([]);
+        setFormErrors({});
+        
+        // Reload products to get the updated list
+        loadFarmerProducts();
+      }
+      
     } catch (error) {
       console.error('❌ Error adding product:', error);
-      console.error('Error response:', error.response);
-      toast.error(error.response?.data?.message || 'Failed to add product');
+      console.error('Error response:', error.response?.data);
+      
+      let errorMessage = 'Failed to add product';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors
+        const validationErrors = error.response.data.errors;
+        errorMessage = Object.values(validationErrors).join(', ');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
   const handleEditProduct = async () => {
+    if (!selectedProduct) return;
+
+    setFormErrors({});
+
+    // Validate form fields
+    const errors = validateForm(selectedProduct);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error('Please fix the form errors');
+      return;
+    }
+
+    // Validate at least one image
+    if (selectedProduct.existingImages.length === 0 && images.length === 0) {
+      toast.error('Please upload at least one image');
+      return;
+    }
+
     try {
-      if (!selectedProduct) return;
-
-      // Validate all required fields
-      const requiredFields = {
-        title: 'Product title',
-        description: 'Description',
-        category: 'Category',
-        pricePerUnit: 'Price per unit',
-        measuringUnit: 'Unit',
-        minOrderQty: 'Minimum order quantity',
-        shelfLifeDays: 'Shelf life',
-        quantityAvailable: 'Quantity available',
-        deliveryRadiusKm: 'Delivery radius'
-      };
-
-      for (const [key, label] of Object.entries(requiredFields)) {
-        if (!selectedProduct[key]) {
-          toast.error(`${label} is required`);
-          return;
-        }
-      }
-
-      // Validate at least one image
-      if (selectedProduct.existingImages.length === 0 && images.length === 0) {
-        toast.error('Please upload at least one image');
-        return;
-      }
-
-      // Create form data
       const formData = new FormData();
 
-      // Add text fields
-      formData.append('title', selectedProduct.title);
-      formData.append('description', selectedProduct.description);
+      // Add product data
+      formData.append('title', selectedProduct.title.trim());
+      formData.append('description', selectedProduct.description.trim());
       formData.append('category', selectedProduct.category);
       formData.append('measuringUnit', selectedProduct.measuringUnit);
+      formData.append('pricePerUnit', parseFloat(selectedProduct.pricePerUnit));
+      formData.append('minOrderQty', parseFloat(selectedProduct.minOrderQty));
+      formData.append('shelfLifeDays', parseInt(selectedProduct.shelfLifeDays));
+      formData.append('quantityAvailable', parseFloat(selectedProduct.quantityAvailable));
+      formData.append('deliveryRadiusKm', parseInt(selectedProduct.deliveryRadiusKm));
 
-      // Add numeric fields with explicit conversion
-      formData.append('pricePerUnit', Number(selectedProduct.pricePerUnit).toString());
-      formData.append('minOrderQty', Number(selectedProduct.minOrderQty).toString());
-      formData.append('shelfLifeDays', Number(selectedProduct.shelfLifeDays).toString());
-      formData.append('quantityAvailable', Number(selectedProduct.quantityAvailable).toString());
-      formData.append('deliveryRadiusKm', Number(selectedProduct.deliveryRadiusKm).toString());
-
-      // Add existing images as a JSON string
+      // Add existing images
       formData.append('existingImages', JSON.stringify(selectedProduct.existingImages));
 
       // Add new images
@@ -232,20 +336,41 @@ const FarmerDashboard = () => {
         formData.append('images', image);
       });
 
-      // Submit the form
-      const response = await api.put(`/api/products/${selectedProduct._id}`, formData);
+      const response = await api.put(`/api/products/${selectedProduct._id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       
-      // Update the products list with the edited product
-      setProducts(products.map(p => 
-        p._id === selectedProduct._id ? response.data.product : p
-      ));
+      console.log('✅ Product updated successfully:', response.data);
+      
+      // Handle different response formats
+      let updatedProduct = null;
+      
+      if (response.data.product) {
+        updatedProduct = response.data.product;
+      } else if (response.data.data) {
+        updatedProduct = response.data.data;
+      } else if (response.data) {
+        updatedProduct = response.data;
+      }
+      
+      if (updatedProduct) {
+        // Update the products list with the edited product
+        setProducts(products.map(p => 
+          p._id === selectedProduct._id ? updatedProduct : p
+        ));
+      } else {
+        // If no product data in response, reload the products list
+        loadFarmerProducts();
+      }
       
       setShowEditModal(false);
-      toast.success('Product updated successfully!');
-      
-      // Reset form
       setSelectedProduct(null);
       setImages([]);
+      setFormErrors({});
+      
+      toast.success('Product updated successfully!');
       
     } catch (error) {
       console.error('Error updating product:', error);
@@ -270,7 +395,6 @@ const FarmerDashboard = () => {
     try {
       await api.put(`/api/orders/${orderId}/status`, { status: newStatus });
       toast.success('Order status updated successfully');
-      // Refresh orders to show updated status
       loadFarmerOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -371,7 +495,7 @@ const FarmerDashboard = () => {
                                   <strong>{product.title}</strong>
                                   <br />
                                   <small className="text-muted">
-                                    {product.description.length > 50 
+                                    {product.description && product.description.length > 50 
                                       ? `${product.description.substring(0, 50)}...` 
                                       : product.description
                                     }
@@ -460,32 +584,32 @@ const FarmerDashboard = () => {
                         {orders.map((order) => (
                           <tr key={order._id}>
                             <td>
-                              #{order._id.slice(-6)}
+                              #{order._id?.slice(-6) || 'N/A'}
                               <br />
                               <small className="text-muted">
-                                {new Date(order.createdAt).toLocaleDateString()}
+                                {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
                               </small>
                             </td>
                             <td>
                               <div>
-                                <strong>{order.consumer?.name}</strong>
-                                <small className="text-muted d-block">{order.consumer?.email}</small>
-                                <small className="text-muted d-block">{order.consumer?.phone}</small>
+                                <strong>{order.consumer?.name || 'N/A'}</strong>
+                                <small className="text-muted d-block">{order.consumer?.email || 'N/A'}</small>
+                                <small className="text-muted d-block">{order.consumer?.phone || 'N/A'}</small>
                               </div>
                             </td>
                             <td>
-                              {order.items.map((item, idx) => (
+                              {order.items && order.items.map((item, idx) => (
                                 <div key={idx} className="mb-1">
-                                  <strong>{item.product?.title || item.title}</strong>
+                                  <strong>{item.product?.title || item.title || 'Unknown Product'}</strong>
                                   <br />
                                   <small className="text-muted">
-                                    {item.qty ?? item.quantity} {item.measuringUnit || item.product?.measuringUnit} × ₹{item.unitPrice ?? item.product?.pricePerUnit}
+                                    {(item.qty ?? item.quantity ?? 0)} {(item.measuringUnit || item.product?.measuringUnit || 'unit')} × ₹{item.unitPrice ?? item.product?.pricePerUnit ?? 0}
                                   </small>
                                 </div>
                               ))}
                             </td>
                             <td>
-                              <strong>₹{order.subtotal}</strong>
+                              <strong>₹{order.subtotal || order.total || 0}</strong>
                               <div className="mt-1">
                                 <small className="text-muted">Cash on Delivery</small>
                               </div>
@@ -495,7 +619,7 @@ const FarmerDashboard = () => {
                               <div className="mt-2">
                                 <Form.Select 
                                   size="sm" 
-                                  value={order.status}
+                                  value={order.status || 'placed'}
                                   onChange={(e) => handleUpdateOrderStatus(order._id, e.target.value)}
                                 >
                                   <option value="placed">Placed</option>
@@ -512,7 +636,9 @@ const FarmerDashboard = () => {
                                   variant="outline-primary" 
                                   size="sm"
                                   onClick={() => {
-                                    window.open(`/orders/${order._id}`, '_blank');
+                                    if (order._id) {
+                                      window.open(`/orders/${order._id}`, '_blank');
+                                    }
                                   }}
                                 >
                                   View Details
@@ -597,9 +723,13 @@ const FarmerDashboard = () => {
                     type="text"
                     value={newProduct.title}
                     onChange={(e) => setNewProduct({...newProduct, title: e.target.value})}
+                    isInvalid={!!formErrors.title}
                     required
                     placeholder="e.g., Organic Tomatoes"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.title}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
               <Col md={6}>
@@ -629,9 +759,13 @@ const FarmerDashboard = () => {
                 rows={3}
                 value={newProduct.description}
                 onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                isInvalid={!!formErrors.description}
                 required
                 placeholder="Describe your product in detail..."
               />
+              <Form.Control.Feedback type="invalid">
+                {formErrors.description}
+              </Form.Control.Feedback>
             </Form.Group>
 
             <Row>
@@ -641,12 +775,16 @@ const FarmerDashboard = () => {
                   <Form.Control
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     value={newProduct.pricePerUnit}
                     onChange={(e) => setNewProduct({...newProduct, pricePerUnit: e.target.value})}
+                    isInvalid={!!formErrors.pricePerUnit}
                     required
                     placeholder="0.00"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.pricePerUnit}
+                  </Form.Control.Feedback>
                   <Form.Text className="text-muted">
                     Price per unit
                   </Form.Text>
@@ -675,11 +813,16 @@ const FarmerDashboard = () => {
                   <Form.Control
                     type="number"
                     min="1"
+                    step="1"
                     value={newProduct.minOrderQty}
                     onChange={(e) => setNewProduct({...newProduct, minOrderQty: e.target.value})}
+                    isInvalid={!!formErrors.minOrderQty}
                     required
                     placeholder="1"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.minOrderQty}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
             </Row>
@@ -691,11 +834,16 @@ const FarmerDashboard = () => {
                   <Form.Control
                     type="number"
                     min="1"
+                    step="1"
                     value={newProduct.shelfLifeDays}
                     onChange={(e) => setNewProduct({...newProduct, shelfLifeDays: e.target.value})}
+                    isInvalid={!!formErrors.shelfLifeDays}
                     required
                     placeholder="7"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.shelfLifeDays}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
               <Col md={4}>
@@ -704,11 +852,16 @@ const FarmerDashboard = () => {
                   <Form.Control
                     type="number"
                     min="0"
+                    step="1"
                     value={newProduct.quantityAvailable}
                     onChange={(e) => setNewProduct({...newProduct, quantityAvailable: e.target.value})}
+                    isInvalid={!!formErrors.quantityAvailable}
                     required
                     placeholder="100"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.quantityAvailable}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
               <Col md={4}>
@@ -717,11 +870,16 @@ const FarmerDashboard = () => {
                   <Form.Control
                     type="number"
                     min="1"
+                    step="1"
                     value={newProduct.deliveryRadiusKm}
                     onChange={(e) => setNewProduct({...newProduct, deliveryRadiusKm: e.target.value})}
+                    isInvalid={!!formErrors.deliveryRadiusKm}
                     required
                     placeholder="10"
                   />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.deliveryRadiusKm}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
             </Row>
@@ -754,7 +912,11 @@ const FarmerDashboard = () => {
                     ...selectedProduct,
                     title: e.target.value
                   })}
+                  isInvalid={!!formErrors.title}
                 />
+                <Form.Control.Feedback type="invalid">
+                  {formErrors.title}
+                </Form.Control.Feedback>
               </Form.Group>
 
               <Form.Group className="mb-3">
@@ -767,7 +929,11 @@ const FarmerDashboard = () => {
                     ...selectedProduct,
                     description: e.target.value
                   })}
+                  isInvalid={!!formErrors.description}
                 />
+                <Form.Control.Feedback type="invalid">
+                  {formErrors.description}
+                </Form.Control.Feedback>
               </Form.Group>
 
               <Row>
@@ -794,12 +960,18 @@ const FarmerDashboard = () => {
                     <Form.Label>Price per Unit (₹)</Form.Label>
                     <Form.Control
                       type="number"
+                      step="0.01"
+                      min="0.01"
                       value={selectedProduct.pricePerUnit}
                       onChange={(e) => setSelectedProduct({
                         ...selectedProduct,
                         pricePerUnit: e.target.value
                       })}
+                      isInvalid={!!formErrors.pricePerUnit}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {formErrors.pricePerUnit}
+                    </Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -829,12 +1001,18 @@ const FarmerDashboard = () => {
                     <Form.Label>Minimum Order Quantity</Form.Label>
                     <Form.Control
                       type="number"
+                      min="1"
+                      step="1"
                       value={selectedProduct.minOrderQty}
                       onChange={(e) => setSelectedProduct({
                         ...selectedProduct,
                         minOrderQty: e.target.value
                       })}
+                      isInvalid={!!formErrors.minOrderQty}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {formErrors.minOrderQty}
+                    </Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -845,12 +1023,18 @@ const FarmerDashboard = () => {
                     <Form.Label>Available Quantity</Form.Label>
                     <Form.Control
                       type="number"
+                      min="0"
+                      step="1"
                       value={selectedProduct.quantityAvailable}
                       onChange={(e) => setSelectedProduct({
                         ...selectedProduct,
                         quantityAvailable: e.target.value
                       })}
+                      isInvalid={!!formErrors.quantityAvailable}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {formErrors.quantityAvailable}
+                    </Form.Control.Feedback>
                   </Form.Group>
                 </Col>
                 <Col md={6}>
@@ -858,12 +1042,18 @@ const FarmerDashboard = () => {
                     <Form.Label>Shelf Life (days)</Form.Label>
                     <Form.Control
                       type="number"
+                      min="1"
+                      step="1"
                       value={selectedProduct.shelfLifeDays}
                       onChange={(e) => setSelectedProduct({
                         ...selectedProduct,
                         shelfLifeDays: e.target.value
                       })}
+                      isInvalid={!!formErrors.shelfLifeDays}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {formErrors.shelfLifeDays}
+                    </Form.Control.Feedback>
                   </Form.Group>
                 </Col>
               </Row>
@@ -872,12 +1062,18 @@ const FarmerDashboard = () => {
                 <Form.Label>Delivery Radius (km)</Form.Label>
                 <Form.Control
                   type="number"
+                  min="1"
+                  step="1"
                   value={selectedProduct.deliveryRadiusKm}
                   onChange={(e) => setSelectedProduct({
                     ...selectedProduct,
                     deliveryRadiusKm: e.target.value
                   })}
+                  isInvalid={!!formErrors.deliveryRadiusKm}
                 />
+                <Form.Control.Feedback type="invalid">
+                  {formErrors.deliveryRadiusKm}
+                </Form.Control.Feedback>
               </Form.Group>
 
               <Form.Group className="mb-3">

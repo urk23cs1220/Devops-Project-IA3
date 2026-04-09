@@ -1,0 +1,8 @@
+﻿NAME                                         READY   STATUS    RESTARTS        AGE
+backend-76dbc5c6cd-8p5pk                     1/1     Running   1 (95s ago)     2m39s
+backend-76dbc5c6cd-9v4bz                     1/1     Running   1 (95s ago)     2m39s
+frontend-9cb67d868-khzfr                     1/1     Running   0               2m38s
+frontend-9cb67d868-qsxc5                     1/1     Running   0               2m38s
+mongo-784b5fd4c4-gzhg4                       1/1     Running   0               2m38s
+music-playlist-deployment-69c9f97b6f-s2fqp   1/1     Running   2 (3m42s ago)   14d
+music-playlist-deployment-69c9f97b6f-w86kz   1/1     Running   2 (3m42s ago)   14d
