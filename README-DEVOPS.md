@@ -1,147 +1,95 @@
 # AgroLink DevOps Pipeline Guide
 
-This document outlines the DevOps setup for your academic assignment: "DevOps-Based Automation of AgroLink Web Application on Kubernetes Platform."
+This document outlines the DevOps setup for your project: "DevOps-Based Automation of AgroLink Web Application on Kubernetes Platform."
+
+## Updated Architecture (Supabase & Docker Hub)
+
+The project has been migrated from MongoDB to **Supabase**. The CI/CD pipeline now uses **Docker Hub** as the image registry and deploys to a local Kubernetes (Minikube) cluster using GitHub Actions.
 
 ## Folder Structure
-
-Based on your actual code repository (`client` and `server`), the new DevOps folder structure integrated into your project looks like this:
 
 ```
 agrolink/
 ├── client/
-│   ├── src/, public/, package.json, vite.config.js
 │   ├── Dockerfile             (Frontend container spec)
-│   ├── .dockerignore          (Ignore node_modules)
 │   └── nginx.conf             (React-router configuration)
 ├── server/
-│   ├── models/, routes/, server.js, package.json
 │   ├── Dockerfile             (Backend container spec)
-│   └── .dockerignore          (Ignore node_modules)
 ├── k8s/
-│   ├── mongo.yaml             (MongoDB deployment + service)
 │   ├── backend.yaml           (Node.js deployment + service)
-│   └── frontend.yaml          (React/Nginx deployment + service)
+│   ├── frontend.yaml          (React/Nginx deployment + service)
+│   └── secrets-template.yaml  (Reference for K8s secrets)
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml         (CI/CD Pipeline with GitHub Actions)
+│       └── deploy.yml         (CI/CD Pipeline with Docker Hub push)
 ├── ansible/
 │   └── deploy-k8s.yml         (Automated K8s deployment playbook)
 ├── terraform/
-│   └── main.tf                (Basic dummy K8s infrastructure setup)
-└── docker-compose.yml         (Run entirely locally via Docker Compose)
+│   └── main.tf                (Infra-as-Code for Namespace)
+└── docker-compose.yml         (Local development environment)
 ```
 
-## How Services Communicate
+## Setup Requirements
 
-1. **Frontend to Backend**: The Vite React app (`frontend`) communicates with the backend via the `VITE_API_URL` environment variable. When deployed to Kubernetes, it connects using the Minikube IP and backend NodePort, or via a Reverse Proxy if configured. Locally with `docker-compose`, it connects port `3000 -> 7000`.
-2. **Backend to MongoDB**: The `backend` uses Mongoose to connect to MongoDB using the `MONGODB_URI` environment variable. In Kubernetes (and Docker Compose), it connects using the Service DNS name (`mongodb://mongodb:27017/agrolink`).
-3. **MongoDB**: The official `mongo:latest` image runs on port 27017 and is only exposed internally to the cluster so the backend can securely talk to it.
+### 1. GitHub Secrets
+To make the CI/CD pipeline work, you **MUST** add the following secrets to your GitHub Repository (`Settings > Secrets and variables > Actions`):
+
+| Secret Name | Description |
+| ----------- | ----------- |
+| `DOCKER_HUB_USERNAME` | Your Docker Hub ID |
+| `DOCKER_HUB_TOKEN` | Your Docker Hub Access Token or Password |
+| `SUPABASE_URL` | Your Supabase Project URL |
+| `SUPABASE_KEY` | Your Supabase Service Role Key (or Anon Key) |
+| `JWT_SECRET` | Secret key for JWT authentication |
 
 ---
 
-## Step-by-Step Execution Commands
+## Step-by-Step Execution
 
-### Prerequisites
-Make sure you have installed on your laptop:
-- Docker Desktop
-- Minikube
-- kubectl
-
-### 1. Running with Docker Compose (Local Testing)
-This step is useful to verify that the containerized applications work before throwing Kubernetes into the mix.
-
+### 1. Local Development (Docker Compose)
+Verify everything works locally before pushing to GitHub.
 ```bash
-# Navigate to the project root
-cd "d:\devops agrolink\agrolink"
-
-# Build and start all services
+# Build and start services
 docker-compose up --build -d
 
-# Verify containers are running
-docker ps
-
-# You can access the app at http://localhost:3000
-```
-To stop the services:
-```bash
-docker-compose down
+# Access app at http://localhost:3000
 ```
 
----
-
-### 2. Running the Kubernetes Pipeline (Minikube)
-
-#### Step 2.1: Start Minikube
+### 2. Infrastructure as Code (Terraform)
+Provision the `agrolink-prod` namespace in Minikube.
 ```bash
-minikube start
+cd terraform
+terraform init
+terraform apply -auto-approve
 ```
 
-#### Step 2.2: Build Docker Images inside Minikube
-Since we are using local Kubernetes without DockerHub for this assignment, we must build the images directly inside Minikube's Docker environment.
-
+### 3. Automated Kubernetes Deployment (Ansible)
+If you want to deploy manually using Ansible:
 ```bash
-# Point your shell to use Minikube's Docker daemon
-# On Windows PowerShell:
-minikube docker-env | Invoke-Expression
-
-# Build Backend Image
-docker build -t agrolink-backend:latest ./server
-
-# Build Frontend Image
-docker build -t agrolink-frontend:latest ./client
-```
-
-#### Step 2.3: Deploy using `kubectl` manually (Alternative 1)
-```bash
-kubectl apply -f k8s/mongo.yaml
-kubectl apply -f k8s/backend.yaml
-kubectl apply -f k8s/frontend.yaml
-```
-
-#### Step 2.4: Deploy using Ansible (Alternative 2 - Required for marks)
-If you have Ansible installed (typically through WSL on Windows):
-```bash
+# Ensure your manifests have your Docker Hub username substituted or use a local one
 cd ansible
 ansible-playbook deploy-k8s.yml
 ```
 
----
-
-### 3. Verification Commands
-
-Run these to verify that your cluster is healthy:
-
-```bash
-# Check if pods are running (You should see 1 mongo, 2 backend, 2 frontend)
-kubectl get pods
-
-# Check if services are correctly hooked up
-kubectl get services
-```
-
-> [!TIP]
-> **To access the Frontend on Minikube:**
-> Since the frontend is a `NodePort` service (port 30000), you can request Minikube to open it automatically in your browser:
-> ```bash
-> minikube service frontend
-> ```
+### 4. CI/CD Pipeline (GitHub Actions)
+Every `push` to the `main` branch will:
+1.  Log in to **Docker Hub**.
+2.  Build and push `agrolink-backend` and `agrolink-frontend` images.
+3.  Start **Minikube** in the GitHub runner.
+4.  Inject secrets and deploy to the cluster in the `agrolink-prod` namespace.
 
 ---
 
-### 4. Terraform Setup (Optional Basic Infra)
-To demonstrate basic Infrastructure-as-Code for an assignment, you can provision a Kubernetes Namespace using Terraform.
+## Verification Commands
 
+Check your cluster status:
 ```bash
-cd terraform
-# Initialize Terraform provider
-terraform init
+# Check pods (Namespace: agrolink-prod)
+kubectl get pods -n agrolink-prod
 
-# Plan and view changes
-terraform plan
+# Check services
+kubectl get svc -n agrolink-prod
 
-# Apply changes (creates 'agrolink-prod' namespace)
-terraform apply -auto-approve
-
-# Verify it was created
-kubectl get namespaces
+# Access the app via Minikube
+minikube service frontend -n agrolink-prod
 ```

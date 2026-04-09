@@ -3,13 +3,8 @@
   hosts: localhost
   connection: local
   tasks:
-    - name: Apply MongoDB Deployment and Service
-      command: kubectl apply -f ../k8s/mongo.yaml
-      register: mongo_result
-
-    - name: Show MongoDB Apply Result
-      debug:
-        var: mongo_result.stdout
+    - name: Ensure Namespace exists
+      command: kubectl create namespace agrolink-prod --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Apply Backend Deployment and Service
       command: kubectl apply -f ../k8s/backend.yaml
@@ -27,8 +22,8 @@
       debug:
         var: frontend_result.stdout
 
-    - name: Verify all pods
-      command: kubectl get pods
+    - name: Verify all pods in namespace
+      command: kubectl get pods -n agrolink-prod
       register: pods_result
 
     - name: Show Pods

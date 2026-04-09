@@ -13,17 +13,19 @@ provider "kubernetes" {
   config_context = "minikube"
 }
 
-# Example: Automating the creation of a namespace for AgroLink
-resource "kubernetes_namespace" "agrolink_namespace" {
+# Automating the creation of a dedicated production namespace
+resource "kubernetes_namespace" "agrolink_prod" {
   metadata {
     name = "agrolink-prod"
     labels = {
       environment = "production"
       app         = "agrolink"
+      managed-by  = "terraform"
     }
   }
 }
 
-# You could also automate the deployment of the pods via Terraform,
-# but using `kubectl apply` via Ansible/CI is standard for application code.
-# This Terraform file sets up the foundational infrastructure.
+# Output the namespace name for information
+output "namespace_name" {
+  value = kubernetes_namespace.agrolink_prod.metadata[0].name
+}
