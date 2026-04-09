@@ -53,7 +53,7 @@ jobs:
         kubectl create namespace agrolink-prod --dry-run=client -o yaml | kubectl apply -f -
         
         # Create or update secrets
-        kubectl create secret opaque agrolink-secrets \
+        kubectl create secret generic agrolink-secrets \
           --namespace agrolink-prod \
           --from-literal=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
           --from-literal=SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
