@@ -20,7 +20,7 @@ jobs:
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
       with:
-        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
     - name: Build and Push Backend Image
@@ -28,7 +28,7 @@ jobs:
       with:
         context: ./server
         push: true
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/agrolink-backend:latest
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/agrolink-backend:latest
 
     - name: Build and Push Frontend Image
       uses: docker/build-push-action@v4
@@ -37,15 +37,15 @@ jobs:
         push: true
         build-args: |
           VITE_API_URL=http://localhost:30000
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/agrolink-frontend:latest
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/agrolink-frontend:latest
 
     - name: Set up Minikube/Kubectl
       uses: medyagh/setup-minikube@master
 
     - name: Inject image placeholders in manifests
       run: |
-        sed -i "s|DOCKER_HUB_USERNAME|${{ secrets.DOCKER_HUB_USERNAME }}|g" k8s/backend.yaml
-        sed -i "s|DOCKER_HUB_USERNAME|${{ secrets.DOCKER_HUB_USERNAME }}|g" k8s/frontend.yaml
+        sed -i "s|DOCKER_HUB_USERNAME|${{ secrets.DOCKERHUB_USERNAME }}|g" k8s/backend.yaml
+        sed -i "s|DOCKER_HUB_USERNAME|${{ secrets.DOCKERHUB_USERNAME }}|g" k8s/frontend.yaml
 
     - name: Deploy to Kubernetes
       run: |
