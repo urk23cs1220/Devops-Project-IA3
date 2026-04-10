@@ -20,3 +20,9 @@ Thank you for your interest in contributing to AgroLink! This project follows a 
 
 ## Code of Conduct
 Please be respectful and professional in all communications.
+
+
+## Roles
+- **Frontend Developer:** Implemented React dashboard
+- **Backend Developer:** Managed Node.js and Supabase migrations
+- **DevOps Engineer:** Architected CI/CD pipeline and Kubernetes configurations
