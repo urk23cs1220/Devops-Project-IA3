@@ -115,7 +115,11 @@ exports.updateProduct = async (req, res) => {
     if (product.farmer_id !== userId) return res.status(403).json({ message: 'Access denied' });
 
     let existingImages = [];
-
+    try {
+      existingImages = req.body.existingImages ? JSON.parse(req.body.existingImages) : [];
+    } catch (_e) {
+      existingImages = [];
+    }
 
     let images = existingImages;
     if (req.files && req.files.length > 0) {

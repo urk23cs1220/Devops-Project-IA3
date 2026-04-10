@@ -1,4 +1,4 @@
-
+const errorMiddleware = (err, req, res, _next) => {
   console.error('Error:', err.stack);
 
   // Mongoose validation error
