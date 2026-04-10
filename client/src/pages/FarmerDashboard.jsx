@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Table, Button, Badge, Modal, Form, Alert, Sp
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../services/api';
+import PricePredictor from '../components/PricePredictor';
 
 const FarmerDashboard = () => {
   const navigate = useNavigate();
@@ -444,6 +445,11 @@ const FarmerDashboard = () => {
           <Nav.Item>
             <Nav.Link eventKey="orders">Orders</Nav.Link>
           </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="ai">
+              <span className="me-1">✨</span> AI Insights
+            </Nav.Link>
+          </Nav.Item>
         </Nav>
 
         <Tab.Content>
@@ -662,6 +668,26 @@ const FarmerDashboard = () => {
                 </Card.Body>
               </Card>
             )}
+          </Tab.Pane>
+
+          <Tab.Pane eventKey="ai">
+            <div className="animate-fadeIn">
+              <PricePredictor />
+              
+              <Row className="mt-4">
+                <Col md={12}>
+                  <Card className="border-0 shadow-sm bg-light">
+                    <Card.Body>
+                      <h5>About AI Predictions</h5>
+                      <p className="text-muted mb-0">
+                        Our AI model analyzes historical price data, seasonal trends, and current market demand to provide estimated pricing. 
+                        Use these insights to set competitive prices for your products.
+                      </p>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+            </div>
           </Tab.Pane>
         </Tab.Content>
       </Tab.Container>
