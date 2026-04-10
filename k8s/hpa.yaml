@@ -5,7 +5,7 @@ metadata:
   namespace: agrolink-prod
 spec:
   scaleTargetRef:
-    apiVersions: apps/v1
+    apiVersion: apps/v1
     kind: Deployment
     name: backend
   minReplicas: 2
@@ -25,7 +25,7 @@ metadata:
   namespace: agrolink-prod
 spec:
   scaleTargetRef:
-    apiVersions: apps/v1
+    apiVersion: apps/v1
     kind: Deployment
     name: frontend
   minReplicas: 2
