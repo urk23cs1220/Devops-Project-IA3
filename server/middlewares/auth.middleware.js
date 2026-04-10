@@ -32,9 +32,7 @@ const authMiddleware = async (req, res, next) => {
       user._id = user.id;
       req.user = user;
       return next();
-    } catch (jwtErr) {
-      // Not a valid JWT — fall back to demo-token scheme
-    }
+
 
     // Demo token format: demo-token:::<userId>:::<ts>
     if (token.startsWith('demo-token:::')) {

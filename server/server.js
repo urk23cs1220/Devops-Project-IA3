@@ -419,7 +419,7 @@ app.get('/api/utils/weather', (req, res) => {
 });
 
 // 404 handler
-app.use((req, res, next) => {
+app.use((req, res, _next) => {
   res.status(404).json({
     success: false,
     message: 'Route not found',
@@ -443,7 +443,7 @@ app.use((req, res, next) => {
 });
 
 // Error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('💥 Server error:', err);
   res.status(500).json({
     success: false,

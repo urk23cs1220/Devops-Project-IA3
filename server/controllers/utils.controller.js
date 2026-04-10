@@ -46,7 +46,6 @@ exports.getWeather = async (req, res) => {
 exports.getPriceSuggestion = async (req, res) => {
   try {
     const {
-      productCategory,
       avgMarketPrice,
       quantityAvailable,
       shelfLifeDays,
@@ -87,7 +86,7 @@ exports.getPriceSuggestion = async (req, res) => {
 // Simple AI Crop Price Prediction Model
 exports.predictCropPrice = async (req, res) => {
   try {
-    const { crop, region = 'General', currentPrice } = req.body;
+    const { crop, region = 'General' } = req.body;
 
     if (!crop) {
       return res.status(400).json({ message: 'Crop name is required' });
