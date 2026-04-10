@@ -18,9 +18,9 @@ const Home = () => {
                 🌱 Agro-Link Pro
               </h1>
               <p className="lead mb-4 text-light">
-                Connecting Farmers Directly with Consumers.
-                Fresh produce delivered to your doorstep. Support local agriculture
-                and get the best quality at fair prices.
+                Connecting Farmers through a <strong>Farm-to-Table</strong> experience with AI-powered insights. 
+                Optimized with <strong>AI Price Prediction</strong> to support local agriculture 
+                and ensure you get the best quality at fair prices.
               </p>
               <div className="d-flex flex-wrap gap-3">
                 {!isAuthenticated ? (

@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const supabase = require('./config/supabase');
+const swaggerJsDoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 
@@ -35,11 +37,39 @@ app.use('/uploads', (req, res, next) => {
 }));
 console.log('📡 Serving static files from:', path.join(__dirname, 'uploads'));
 
-// Log static file requests in development
 app.use('/uploads', (req, res, next) => {
   console.log('📸 Image request:', req.url);
   next();
 });
+
+// Swagger Configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'AgroLink API Documentation',
+      version: '1.0.0',
+      description: 'Professional API documentation for the AgroLink Farm-to-Table Platform, including the AI-powered crop price prediction engine.',
+      contact: {
+        name: 'AgroLink DevOps Team'
+      },
+    },
+    servers: [
+      {
+        url: 'http://localhost:7000',
+        description: 'Development Server'
+      },
+      {
+        url: '/api',
+        description: 'Kubernetes API Proxy'
+      }
+    ],
+  },
+  apis: ['./routes/*.js'], // Files containing annotations
+};
+
+const swaggerDocs = swaggerJsDoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Test route
 app.get('/', (req, res) => {
@@ -60,11 +90,13 @@ app.get('/api/test', (req, res) => {
 // Import routes
 const productRoutes = require('./routes/products.routes');
 const orderRoutes = require('./routes/orders.routes');
+const utilsRoutes = require('./routes/utils.routes');
 const debugRoutes = require('./routes/debug.routes');
 
 // Use routes
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/utils', utilsRoutes);
 // Debug routes - only in development
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/debug', debugRoutes);
@@ -421,12 +453,16 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 7000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🌐 CORS enabled for all origins`);
-  console.log(`🔐 Available endpoints:`);
-  console.log(`   AUTH: POST /api/auth/signup, /api/auth/login, /api/auth/logout`);
-  console.log(`   PRODUCTS: GET /api/products, POST /api/products, GET /api/products/farmer/my-products`);
-  console.log(`   UTILS: GET /api/utils/weather`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+    console.log(`🌐 CORS enabled for all origins`);
+    console.log(`🔐 Available endpoints:`);
+    console.log(`   AUTH: POST /api/auth/signup, /api/auth/login, /api/auth/logout`);
+    console.log(`   PRODUCTS: GET /api/products, POST /api/products, GET /api/products/farmer/my-products`);
+    console.log(`   UTILS: GET /api/utils/weather, POST /api/utils/predict-price`);
+  });
+}
+
+module.exports = app;

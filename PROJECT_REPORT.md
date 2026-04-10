@@ -2,37 +2,44 @@
 ## Comprehensive Project Report (DevOps Edition)
 
 ### 1. Project Overview
-Agro-Link is a modern e-commerce platform designed to connect local farmers directly with consumers. This version of the project focuses on **DevOps-based automation**, ensuring the application is containerized, orchestrated, and deployed via a fully automated CI/CD pipeline.
+Agro-Link is a modern e-commerce platform designed to connect local farmers directly with consumers. This version of the project focuses on **DevOps-based automation** and **AI-enhanced insights**, ensuring the platform is not only automated but also smart enough to help farmers make data-driven decisions.
 
 ### 2. Technical Architecture (Cloud-Native)
 
 #### 2.1 Technology Stack
-- **Frontend**: React.js (Vite) + Nginx (Containerized)
-- **Backend**: Node.js (Express) (Containerized)
-- **Database**: **Supabase (PostgreSQL)** - Migrated from MongoDB for better relational data handling and cloud scalability.
+- **Frontend**: React.js (Vite) + Nginx (Reverse Proxy)
+- **Backend**: Node.js (Express)
+- **AI Feature**: Heuristic Crop Price Predictor (Integrated with Farmer Dashboard)
+- **Database**: **Supabase (PostgreSQL)** - Migrated from MongoDB.
 - **Containerization**: Docker & Docker Compose
 - **Orchestration**: Kubernetes (Minikube)
 - **CI/CD**: GitHub Actions
 - **Infrastructure as Code (IaC)**: Terraform & Ansible
 
 #### 2.2 DevOps Integration
-- **Docker**: Customized Dockerfiles for both frontend and backend to minimize image size and maximize security.
-- **Kubernetes**: Defined Deployment and Service manifests (NodePort) to manage scaling and high availability.
-- **Registry**: Integrated with **Docker Hub** for automated image storage and versioning.
+- **Docker**: Multi-stage Dockerfiles for optimized production images.
+- **Kubernetes**: Managed deployments with `Namespace` isolation and `NodePort` services.
+- **Reverse Proxy**: Nginx configured as an API gateway within the frontend container.
+- **Registry**: Docker Hub integration for automated versioning.
 
-### 3. Key DevOps Features
+### 3. Key DevOps & AI Features
 
-#### 3.1 GitHub Actions CI/CD Pipeline
+#### 3.1 AI Crop Price Predictor (NEW)
+- **Smart Insights**: Farmers can enter a crop type to receive a predicted market price range.
+- **Data-Driven**: Uses seasonality factors, base prices, and market volatility scores to simulate AI predictions.
+- **Visual Analytics**: Provides a 3-month forecast and "Pro Tips" for maximizing profit.
+
+#### 3.2 GitHub Actions CI/CD Pipeline
 - **Auto-Build**: Triggers on every push to the `main` branch.
-- **registry Push**: Automatically builds and pushes production-ready images to Docker Hub.
+- **Registry Push**: Automatically builds and pushes production-ready images to Docker Hub.
 - **Automated Deploy**: Dynamically injects secrets and deploys the latest images to the Kubernetes cluster.
 
-#### 3.2 Infrastructure as Code (IaC)
-- **Terraform**: Automates the creation of the `agrolink-prod` Kubernetes namespace for environment isolation.
-- **Ansible**: Provides a playbook for rapid local verification and multinode deployment configuration.
+#### 3.3 Infrastructure as Code (IaC)
+- **Terraform**: Automates the creation of the `agrolink-prod` Kubernetes namespace.
+- **Ansible**: Provides a playbook for rapid local verification and configuration.
 
-#### 3.3 Security & Secret Management
-- **Kubernetes Secrets**: All sensitive credentials (Supabase Keys, JWT Secrets) are managed via encrypted Kubernetes Secrets, never hardcoded in the source code.
+#### 3.4 Security & Secret Management
+- **Kubernetes Secrets**: Manages Supabase Keys and JWT Secrets securely within the cluster.
 
 ### 4. Database Schema (Supabase/PostgreSQL)
 The application has been refactored to use a relational schema in Supabase:

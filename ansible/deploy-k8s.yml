@@ -6,26 +6,33 @@
     - name: Ensure Namespace exists
       command: kubectl create namespace agrolink-prod --dry-run=client -o yaml | kubectl apply -f -
 
-    - name: Apply Backend Deployment and Service
-      command: kubectl apply -f ../k8s/backend.yaml
-      register: backend_result
+    - name: Apply Kubernetes Configurations
+      command: "kubectl apply -f ../k8s/{{ item }}"
+      loop:
+        - configmap.yaml
+        - backend.yaml
+        - frontend.yaml
+        - hpa.yaml
+      register: apply_results
 
-    - name: Show Backend Apply Result
-      debug:
-        var: backend_result.stdout
+    - name: Wait for Backend to be ready
+      command: kubectl rollout status deployment/backend -n agrolink-prod
+      
+    - name: Wait for Frontend to be ready
+      command: kubectl rollout status deployment/frontend -n agrolink-prod
 
-    - name: Apply Frontend Deployment and Service
-      command: kubectl apply -f ../k8s/frontend.yaml
-      register: frontend_result
+    - name: Verify Health Check Service
+      uri:
+        url: "http://localhost:30008/api/test"
+        status_code: 200
+      register: health_check
+      ignore_errors: yes
+      description: "Checks if the backend is reachable via NodePort 30008"
 
-    - name: Show Frontend Apply Result
-      debug:
-        var: frontend_result.stdout
-
-    - name: Verify all pods in namespace
+    - name: Get final status of pods
       command: kubectl get pods -n agrolink-prod
       register: pods_result
 
-    - name: Show Pods
+    - name: Show Final Pod Status
       debug:
         var: pods_result.stdout

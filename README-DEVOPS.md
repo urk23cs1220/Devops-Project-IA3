@@ -2,11 +2,11 @@
 
 This document outlines the DevOps setup for your project: "DevOps-Based Automation of AgroLink Web Application on Kubernetes Platform."
 
-## Updated Architecture (Supabase & Docker Hub)
+## 🚀 Latest Updates (AI & Cloud-Native)
 
-The project has been migrated from MongoDB to **Supabase**. The CI/CD pipeline now uses **Docker Hub** as the image registry and deploys to a local Kubernetes (Minikube) cluster using GitHub Actions.
+The project now features an **AI Crop Price Predictor** for farmers. The architecture has been enhanced with an **Nginx Reverse Proxy** in the frontend container to securely route API calls to the backend within the Kubernetes cluster.
 
-## Folder Structure
+## Folder Structure (Updated)
 
 ```
 agrolink/
@@ -80,16 +80,24 @@ Every `push` to the `main` branch will:
 
 ---
 
-## Verification Commands
+## Verification & AI Feature Test
 
-Check your cluster status:
+### 🌐 Accessing the App
 ```bash
-# Check pods (Namespace: agrolink-prod)
-kubectl get pods -n agrolink-prod
-
-# Check services
-kubectl get svc -n agrolink-prod
-
-# Access the app via Minikube
+# Get the access URL
 minikube service frontend -n agrolink-prod
 ```
+
+### 🤖 Testing the AI Predictor
+1.  Log in as a **Farmer**.
+2.  Go to the **Dashboard** and select the **✨ AI Insights** tab.
+3.  Enter a crop (e.g., "Tomato" or "Mango").
+4.  The system will analyze current market data (seasonality, trends) and display a predicted price range.
+
+### 🛠️ Troubleshooting Networking
+If API calls fail, ensure the **Nginx Proxy** is active:
+- Check frontend logs: `kubectl logs -l app=frontend -n agrolink-prod`
+- Verify the `API_URL` is set to relative paths in the code (`''`).
+
+---
+*Last Updated: April 2026*
