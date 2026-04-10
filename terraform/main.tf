@@ -34,7 +34,7 @@ variable "jwt_secret" {
 variable "docker_username" {
   description = "Docker Hub Username"
   type        = string
-  default     = "DOCKER_HUB_USERNAME"
+  default     = "deepak56006"
 }
 
 # --- Namespace ---
