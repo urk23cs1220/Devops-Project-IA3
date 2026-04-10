@@ -1,70 +1,80 @@
-# AgroLink: DevOps-Automated Farm-to-Table Platform
-## Comprehensive Project Report (DevOps Edition)
+# DevOps-Driven Automation and Kubernetes Orchestration of the AgroLink Platform
 
-### 1. Project Overview
-Agro-Link is a modern e-commerce platform designed to connect local farmers directly with consumers. This version of the project focuses on **DevOps-based automation** and **AI-enhanced insights**, ensuring the platform is not only automated but also smart enough to help farmers make data-driven decisions.
+## 1. Project Abstract
+The objective of this project was to modernize a monolithic MERN-stack application ("AgroLink") by migrating its architecture to a cloud-native, microservices-oriented environment. We implemented a complete End-to-End DevOps lifecycle, transitioning the database to Supabase (PostgreSQL), containerizing the application with Docker, orchestrating the deployment on Kubernetes, and fully automating the delivery process using a robust GitHub Actions CI/CD pipeline.
 
-### 2. Technical Architecture (Cloud-Native)
+---
 
-#### 2.1 Technology Stack
-- **Frontend**: React.js (Vite) + Nginx (Reverse Proxy)
-- **Backend**: Node.js (Express)
-- **AI Feature**: Heuristic Crop Price Predictor (Integrated with Farmer Dashboard)
-- **Database**: **Supabase (PostgreSQL)** - Migrated from MongoDB.
-- **Containerization**: Docker & Docker Compose
-- **Orchestration**: Kubernetes (Minikube)
-- **CI/CD**: GitHub Actions
-- **Infrastructure as Code (IaC)**: Terraform & Ansible
+## 2. Live Demo Guide: How to Show All Outputs
 
-#### 2.2 DevOps Integration
-- **Docker**: Multi-stage Dockerfiles for optimized production images.
-- **Kubernetes**: Managed deployments with `Namespace` isolation and `NodePort` services.
-- **Reverse Proxy**: Nginx configured as an API gateway within the frontend container.
-- **Registry**: Docker Hub integration for automated versioning.
+Follow these exact steps during your evaluation to demonstrate your project outputs:
 
-### 3. Key DevOps & AI Features
-
-#### 3.1 AI Crop Price Predictor (NEW)
-- **Smart Insights**: Farmers can enter a crop type to receive a predicted market price range.
-- **Data-Driven**: Uses seasonality factors, base prices, and market volatility scores to simulate AI predictions.
-- **Visual Analytics**: Provides a 3-month forecast and "Pro Tips" for maximizing profit.
-
-#### 3.2 GitHub Actions CI/CD Pipeline
-- **Auto-Build**: Triggers on every push to the `main` branch.
-- **Registry Push**: Automatically builds and pushes production-ready images to Docker Hub.
-- **Automated Deploy**: Dynamically injects secrets and deploys the latest images to the Kubernetes cluster.
-
-#### 3.3 Infrastructure as Code (IaC)
-- **Terraform**: Automates the creation of the `agrolink-prod` Kubernetes namespace.
-- **Ansible**: Provides a playbook for rapid local verification and configuration.
-
-#### 3.4 Security & Secret Management
-- **Kubernetes Secrets**: Manages Supabase Keys and JWT Secrets securely within the cluster.
-
-### 4. Database Schema (Supabase/PostgreSQL)
-The application has been refactored to use a relational schema in Supabase:
-- **Users**: UUID-based authentication with role-based access.
-- **Products**: Detailed agricultural product tracking with JSONB support for images and locations.
-- **Orders**: Relational linking between consumers and farmers with status tracking.
-
-### 5. API Endpoints (Restructured)
-The backend routes remain RESTful but are now optimized for a containerized environment, using environment variables for all cross-service communication.
-
-### 6. Project Structure (DevOps Organized)
+### Step 1: Prove the Application is Running Live
+**Terminal Command:**
+```powershell
+minikube service frontend -n agrolink-prod
 ```
-agrolink/
-├── client/                 # Frontend (Dockerfile included)
-├── server/                 # Backend (Dockerfile included)
-├── k8s/                    # Kubernetes Deployment Manifests
-├── terraform/              # Infrastructure-as-Code (Namespace automation)
-├── ansible/                # Automated Playbooks
-└── .github/workflows/      # CI/CD Pipeline Configuration
+**What to say:** *"Our application is currently deployed and running inside the `agrolink-prod` namespace on our Kubernetes cluster. This command exposes our frontend service so users can interact with the live platform."*
+
+### Step 2: Show the Kubernetes Dashboard (UI)
+**Terminal Command:**
+```powershell
+minikube dashboard
 ```
+**What to say:** *"Instead of managing pods purely via the CLI, we can use the Kubernetes dashboard. Selecting our `agrolink-prod` namespace here proves that our isolated backend and frontend deployments are running successfully and are highly available."*
 
-### 7. Performance & Scalability
-- **Elastic Scaling**: Managed by Kubernetes replicas.
-- **Static Content**: Served via Nginx in the frontend container.
-- **Global Availability**: Provided by the Supabase cloud backend.
+### Step 3: Show the Automated CI/CD Pipeline
+**Action:** Open your repository on GitHub -> Click the **Actions** tab -> Click on your latest successful run.
+**What to say:** *"We are using GitHub Actions for Continuous Integration and Continuous Deployment. On every code push, our pipeline automatically runs 6 stages: Linting, Automated Testing (Jest), Docker Image Building, Security Scanning (Trivy), and finally deploying the new manifests to our cluster. This represents true DevOps automation."*
 
-### 8. Conclusion
-The AgroLink project successfully demonstrates a complete transition from a local MERN stack to a sophisticated, **DevOps-automated** cloud-native application. By utilizing Docker, Kubernetes, and GitHub Actions, the platform is now ready for high-scale, reliable deployment.
+### Step 4: Show the Infrastructure as Code (Terraform & Ansible)
+**Action:** Open VS Code and show the `terraform/main.tf` and `ansible/deploy-k8s.yml` files.
+**What to say:** *"To eliminate manual configuration drift, we utilized Terraform to declare our infrastructure state (like ConfigMaps) as code. Meanwhile, our Ansible playbook acts as our configuration management tool, designed to deploy our Kubernetes manifests automatically."*
+
+### Step 5: Show the Live Monitoring (Prometheus & Grafana)
+**Terminal Command:**
+```powershell
+kubectl port-forward -n agrolink-monitoring svc/grafana 3001:3000
+```
+**Action:** Go to `http://localhost:3001` in your browser.
+**What to say:** *"An essential part of DevOps is Observability. We deployed Prometheus to scrape system metrics and Grafana to visualize them. This dashboard allows us to monitor our cluster's health, CPU utilization, and system uptime in real time."*
+
+---
+
+## 3. Project Architecture & Technological Stack
+
+### Core Technologies
+* **Frontend:** React, Vite, TailwindCSS
+* **Backend:** Node.js, Express.js
+* **Database:** Supabase (PostgreSQL) - Migrated from MongoDB
+* **Testing:** Jest, Supertest
+
+### DevOps & Cloud Technologies
+* **Containerization:** Docker (Multi-stage builds for optimized image sizes)
+* **Container Registry:** Docker Hub
+* **Orchestration:** Kubernetes (Minikube)
+* **CI/CD Pipeline:** GitHub Actions
+* **Security Scanning:** Trivy (CVE Vulnerability scanning)
+* **Infrastructure as Code (IaC):** Terraform
+* **Configuration Management:** Ansible
+* **Monitoring & Observability:** Prometheus, Grafana
+
+---
+
+## 4. The CI/CD Pipeline Details
+We built a professional 6-stage automated pipeline that triggers on every code push to the `main` branch:
+1. **Lint Phase:** Automates syntax and code-styling checks using ESLint.
+2. **Test Phase:** Acts as a quality gate by running automated API test suites using Jest to ensure no broken code is deployed.
+3. **Build & Push Phase:** Compiles source code into lightweight Docker images and securely pushes them to Docker Hub using encrypted secrets.
+4. **Security Scan (DevSecOps):** Automatically scans the generated Docker images using Trivy to detect and block high-level security vulnerabilities (CVEs).
+5. **Continuous Deployment (Staging/Prod):** Connects securely to the Kubernetes cluster and automatically applies new deployment manifests, rolling out the updated software with zero downtime.
+
+---
+
+## 5. Kubernetes Orchestration Details
+The application is resilient and highly available, running inside a local Kubernetes cluster utilizing the following configurations:
+* **Deployments:** Decoupled `frontend` and `backend` component microservices.
+* **Services:** Both exposed internally and externally using `NodePort` mapping.
+* **ConfigMaps & Secrets:** Environment variables are securely separated from the source code.
+* **Horizontal Pod Autoscaling (HPA):** The backend is configured to automatically scale up replica pods if CPU usage exceeds 50%.
+* **Self-Healing:** Kubernetes continuously monitors backend `/api/test` health checks and automatically restarts failed containers.
