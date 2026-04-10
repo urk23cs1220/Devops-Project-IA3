@@ -73,3 +73,9 @@ Please read [CONTRIBUTORS.md](./CONTRIBUTORS.md) for our feature-branching strat
 
 ---
 *Developed for Excellence in DevOps Automation.*
+
+
+## Git Workflow & Collaboration
+- **Branching Strategy**: Using 'main' as production, 'develop' as integration, and 'feature/*' branches.
+- **Commits**: Conventional Commits standard enforced.
+- **Collaboration**: All changes are integrated via Pull Requests.
