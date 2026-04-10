@@ -110,3 +110,9 @@ Then navigate to `http://localhost:3001` (Login: `admin` / `admin`).
 
 ---
 *Developed for Excellence in DevOps Automation.*
+
+
+## Git Workflow & Collaboration
+- **Branching Strategy**: Using 'main' as production, 'develop' as integration, and 'feature/*' branches.
+- **Commits**: Conventional Commits standard enforced.
+- **Collaboration**: All changes are integrated via Pull Requests.
