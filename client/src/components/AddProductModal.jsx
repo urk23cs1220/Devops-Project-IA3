@@ -199,7 +199,6 @@ const AddProductModal = ({ show, onHide, onSubmit, product }) => {
       minOrderQty: parseInt(formData.minOrderQty),
       shelfLifeDays: parseInt(formData.shelfLifeDays),
       quantityAvailable: parseInt(formData.quantityAvailable),
-      images: formDataToSubmit,
       deliveryRadiusKm: parseInt(formData.deliveryRadiusKm),
       images: [...existingImages, ...images]
     };

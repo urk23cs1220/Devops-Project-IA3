@@ -1,6 +1,13 @@
 const request = require('supertest');
 const app = require('../server');
 
+// Mock authentication middleware globally for tests
+jest.mock('../middlewares/auth.middleware', () => (req, res, next) => {
+  req.user = { id: 'test-user', role: 'farmer' }; // Mock a logged-in user
+  next();
+});
+
+
 describe('API Health and Utilities', () => {
   test('GET /api/test should return server status', async () => {
     const response = await request(app).get('/api/test');
