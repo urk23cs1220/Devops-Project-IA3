@@ -1,75 +1,112 @@
-# 🥦 AgroLink: Professional Farm-to-Table DevOps Platform
+# 🌱 AgroLink: DevOps-Driven Farm-to-Table Platform
 
-![Build Status](https://img.shields.io/badge/CI%2FCD-Success-success?style=flat-square&logo=github-actions)
-![Platform](https://img.shields.io/badge/Platform-Kubernetes-blue?style=flat-square&logo=kubernetes)
-![Docker](https://img.shields.io/badge/Docker-Hub-0db7ed?style=flat-square&logo=docker)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Build Status](https://img.shields.io/badge/CI%2FCD-Passing-success?style=for-the-badge&logo=github-actions)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.35-blue?style=for-the-badge&logo=kubernetes)
+![Docker](https://img.shields.io/badge/Docker-Hub-0db7ed?style=for-the-badge&logo=docker)
+![Security](https://img.shields.io/badge/DevSecOps-Trivy-purple?style=for-the-badge&logo=security)
 
-AgroLink is a production-grade, fully automated MERN stack platform that connects farmers directly with consumers. Built with a focus on **DevOps excellence**, the system features automated CI/CD pipelines, container orchestration, and an **AI-powered Crop Price Predictor**.
+AgroLink is a production-grade, microservices-oriented platform connecting farmers directly with consumers. Originally a monolithic application, it has been completely modernized utilizing a robust **DevOps, cloud-native architecture**.
 
 ## 🏗️ System Architecture
 
 ```mermaid
 graph TD
     User((User/Farmer)) -->|HTTPS| Frontend[Nginx Frontend Pod]
-    subgraph "Kubernetes (Minikube)"
+    subgraph "Kubernetes (Minikube Cluster)"
         Frontend -->|Reverse Proxy| Backend[Node.js Backend Pod]
         Backend -->|Query| DB[(Supabase/PostgreSQL)]
         Backend -->|Heuristic Engine| AI[AI Price Predictor]
         
-        subgraph "Auto-Scaling"
+        subgraph "Scalability & Resilience"
             Backend --- HPA[Horizontal Pod Autoscaler]
         end
     end
     
-    subgraph "CI/CD Pipeline"
-        Github[Github Repository] -->|Push| Actions[Github Actions]
-        Actions -->|Lint/Test| Build[Build & Push]
-        Build -->|Deploy| K8s[K8s Cluster]
+    subgraph "CI/CD Deployment Pipeline"
+        Github[GitHub Repo] -->|Push/PR| Actions[GitHub Actions]
+        Actions -->|Jest/ESLint| Test[Code Quality]
+        Test -->|Docker Build| Registry[Docker Hub]
+        Registry -->|Trivy Scan| Security[Vulnerability Check]
+        Security -->|kubectl apply| K8s[Staging/Production]
     end
 ```
 
-## 🚀 Key Features
-- **Direct Farm-to-Table**: Seamless commerce between farmers and consumers.
-- **AI Price Prediction**: Real-time harvest value estimation using seasonal trends.
-- **Auto-Scaling Infrastructure**: Kubernetes-managed scaling for high-traffic handling.
-- **Automated CI/CD**: Seamless delivery from code push to production.
+## 🛠️ Technology Stack
+* **Application Core:** React (Vite), TailwindCSS, Node.js, Express.js
+* **Database:** Supabase (PostgreSQL)
+* **Containerization:** Docker (Multi-stage builds)
+* **Orchestration:** Kubernetes (Minikube)
+* **Infrastructure as Code:** Terraform, Ansible
+* **CI/CD & Security:** GitHub Actions, Trivy Security Scanner, ESLint, Jest
+* **Monitoring & Observability:** Prometheus, Grafana
 
-## 🛠️ DevOps Stack
-- **Frontend/Backend**: React, Express, Node.js
-- **Database**: Supabase (PostgreSQL)
-- **Containerization**: Docker (Multi-stage builds)
-- **Orchestration**: Kubernetes (Minikube, HPA)
-- **IaC**: Terraform, Ansible
-- **CI/CD**: GitHub Actions
+---
 
-## 📖 Getting Started
+## 🔀 Version Control & Collaboration Strategy
+
+We implement a strict professional Git Workflow to maintain codebase integrity:
+
+*   **`main` branch:** Production-ready code only.
+*   **`develop` branch:** Integration branch for merging combined features.
+*   **`feature/*` branches:** Dedicated branches for isolated development (e.g., `feature/frontend`, `feature/ai-predictor`).
+*   **Pull Requests (PRs):** All merges require descriptive PRs and code review approvals.
+*   **Commit Standards:** Strict adherence to Conventional Commits format (`feat:`, `fix:`, `chore:`, `docs:`).
+
+---
+
+## 🚀 Execution Guide & Automated Deployment
 
 ### 1. Prerequisites
-- Docker, Minikube, Terraform, Ansible
-- A Supabase account
+Ensure you have the following installed on your local control plane:
+- `docker`, `minikube`, `kubectl`, `terraform`, `npm`
 
-### 2. Quick Deploy (Local)
-```bash
-# Clone the repository
-git clone https://github.com/your-repo/agrolink.git
-cd agrolink
+### 2. Automated Testing Pipeline
+Before any containerization occurs, run the quality gates locally:
+```powershell
+cd server
+npm install
+npm test
+```
+*Validates API routes, JWT security, and HTTP status handling.*
 
-# Deploy infrastructure
-cd terraform && terraform init && terraform apply -auto-approve
+### 3. Deploying the Kubernetes Infrastructure
+Start your cluster and auto-generate the underlying dependencies:
+```powershell
+minikube start
 
-# Deploy app
-cd ../ansible && ansible-playbook deploy-k8s.yml
+# Validate Infrastructure state
+cd terraform
+terraform init
+terraform apply -auto-approve
 ```
 
-### 3. CI/CD Configuration
-Configure these **GitHub Secrets** for the pipeline:
-- `DOCKERHUB_USERNAME`, `DOCKER_HUB_TOKEN`
-- `SUPABASE_URL`, `SUPABASE_KEY`
-- `JWT_SECRET`
+### 4. Deploying the Application
+Automate the rollout of the Deployments, Services, and ConfigMaps:
+*(Note: If Ansible is unavailable on Windows, manual application runs exactly the same logic)*
+```powershell
+kubectl apply -f k8s/
+```
 
-## 🤝 Contributing
-Please read [CONTRIBUTORS.md](./CONTRIBUTORS.md) for our feature-branching strategy and code standards.
+### 5. Accessing the Live Platform
+Expose the frontend service to the browser via NodePort:
+```powershell
+minikube service frontend -n agrolink-prod
+```
+*Your browser will automatically open the live AgroLink application.*
+
+---
+
+## 📈 Observability & Monitoring
+
+The system continuously monitors its own health using Prometheus and visualizes compute usage via Grafana.
+
+**To view the monitoring dashboard:**
+```powershell
+# Port forward Grafana to localhost
+kubectl port-forward -n agrolink-monitoring svc/grafana 3001:3000
+```
+Then navigate to `http://localhost:3001` (Login: `admin` / `admin`).  
+*Here you can view Pod memory, CPU limits triggered via Horizontal Pod Autoscaler (HPA), and application uptime.*
 
 ---
 *Developed for Excellence in DevOps Automation.*
